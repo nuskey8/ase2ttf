@@ -45,16 +45,16 @@ struct Args {
     #[arg(long)]
     font_version: Option<String>,
 
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, require_equals = true, default_value_t = 16)]
     glyph_width: u32,
 
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, require_equals = true, default_value_t = 16)]
     glyph_height: u32,
 
     #[arg(long, default_value_t = false)]
     trim: bool,
 
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, require_equals = true, default_value_t = 1)]
     trim_pad: u32,
 }
 
