@@ -1,0 +1,19 @@
+[package]
+name = "ase2ttf"
+version = "0.1.0"
+edition = "2024"
+description = "A Command-line tool for creating pixel fonts from Aseprite files"
+authors = ["nuskey"]
+license = "Apache-2.0"
+repository = "https://github.com/nuskey8/ase2ttf"
+readme = "README.md"
+keywords = ["aseprite", "font", "cli"]
+categories = ["command-line-utilities"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
+
+[dependencies]
+asefile = "0.3.8"
+chrono = "0.4.41"
+clap = { version = "4.5.40", features = ["derive"] }
+kurbo = "0.11.2"
+write-fonts = "0.39.0"

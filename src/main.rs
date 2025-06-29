@@ -1,0 +1,457 @@
+use asefile::AsepriteFile;
+use chrono::Utc;
+use clap::Parser;
+use kurbo::BezPath;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use write_fonts::tables::cmap::{Cmap, CmapSubtable, EncodingRecord};
+use write_fonts::tables::glyf::{GlyfLocaBuilder, Glyph};
+use write_fonts::tables::hhea::Hhea;
+use write_fonts::tables::hmtx::Hmtx;
+use write_fonts::tables::maxp::Maxp;
+use write_fonts::tables::os2::{Os2, SelectionFlags};
+use write_fonts::tables::post::Post;
+use write_fonts::tables::vmtx::LongMetric;
+use write_fonts::types::Tag;
+use write_fonts::{
+    OffsetMarker,
+    tables::{
+        cmap::PlatformId,
+        glyf::SimpleGlyph,
+        head::{Head, MacStyle},
+        name::{Name, NameRecord},
+    },
+    types::{Fixed, LongDateTime, NameId},
+};
+
+#[derive(Parser, Debug)]
+#[command(version = "0.1.0", about, long_about = None)]
+struct Args {
+    path: String,
+
+    #[arg(short, long)]
+    output: Option<String>,
+
+    #[arg(long)]
+    copyright: Option<String>,
+
+    #[arg(long)]
+    name: Option<String>,
+
+    #[arg(long)]
+    family: Option<String>,
+
+    #[arg(long)]
+    font_version: Option<String>,
+
+    #[arg(long, default_value_t = 16)]
+    glyph_width: u32,
+
+    #[arg(long, default_value_t = 16)]
+    glyph_height: u32,
+
+    #[arg(long, default_value_t = false)]
+    trim: bool,
+
+    #[arg(long, default_value_t = 1)]
+    trim_pad: u32,
+}
+
+fn main() {
+    let args = Args::parse();
+    generate_ttf(args);
+}
+
+fn generate_ttf(args: Args) {
+    // open file
+    let file = Path::new(&args.path);
+    let ase = AsepriteFile::read_file(&file).expect(&format!(
+        "Could not load aseprite file \"{}\".",
+        args.path.clone()
+    ));
+
+    // params
+    let glyph_width = args.glyph_width;
+    let glyph_height = args.glyph_height;
+    let scale_x = 64.0 / glyph_width as f64;
+    let scale_y = 64.0 / glyph_height as f64;
+    let file_stem = file.file_stem().unwrap().to_str().unwrap().to_string();
+
+    // validate size
+    let width = ase.width() as u32;
+    let height = ase.height() as u32;
+    if width % glyph_width != 0 || height % glyph_height != 0 {
+        panic!(
+            "The height and width of the aseprite file must be multiples of glyph-width and glyph-height respectively."
+        )
+    }
+
+    let mut builder = write_fonts::FontBuilder::new();
+
+    // build glyph
+    let mut glyf_builder = GlyfLocaBuilder::new();
+    let mut cmap_entries = vec![];
+    let mut glyph_widths = vec![];
+    let mut glyph_names = vec![];
+    let mut glyph_count = 0;
+
+    // add .notdef / null / space
+    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
+    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
+    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
+    glyph_widths.push(64);
+    glyph_widths.push(64);
+    glyph_widths.push(64);
+    glyph_names.push(".notdef".to_string());
+    glyph_names.push("null".to_string());
+    glyph_names.push("space".to_string());
+    glyph_count += 3;
+
+    for layer in ase.layers() {
+        let image = layer.frame(0).image();
+        let name = layer.name();
+        let base_code = if name.starts_with("U+") || name.starts_with("u+") {
+            let hex_part: String = name[2..]
+                .chars()
+                .take_while(|c| c.is_ascii_hexdigit())
+                .collect();
+            if let Ok(s) = u32::from_str_radix(&hex_part, 16) {
+                s
+            } else {
+                continue;
+            }
+        } else {
+            continue;
+        };
+
+        let cols = width / glyph_width;
+        let rows = height / glyph_height;
+        for row in 0..rows {
+            for col in 0..cols {
+                let mut path = BezPath::new();
+                let mut is_empty = true;
+                let x0 = col * glyph_width;
+                let y0 = row * glyph_height;
+
+                for y in 0..glyph_height {
+                    for x in 0..glyph_width {
+                        let px = x0 + x;
+                        let py = y0 + y;
+                        if px >= width || py >= height {
+                            continue;
+                        }
+                        let pixel = image.get_pixel(px, py);
+                        if pixel[3] == 0 {
+                            continue;
+                        }
+
+                        is_empty = false;
+
+                        let x0 = x as f64 * scale_x;
+                        let y0 = (glyph_height - y) as f64 * scale_y - 24.0;
+                        let x1 = (x + 1) as f64 * scale_x;
+                        let y1 = (glyph_height - y + 1) as f64 * scale_y - 24.0;
+                        path.move_to((x0, y0));
+                        path.line_to((x1, y0));
+                        path.line_to((x1, y1));
+                        path.line_to((x0, y1));
+                        path.close_path();
+                    }
+                }
+
+                if is_empty {
+                    continue;
+                }
+
+                glyf_builder
+                    .add_glyph(&Glyph::Simple(SimpleGlyph::from_bezpath(&path).unwrap()))
+                    .unwrap();
+                let codepoint = base_code + (row * cols + col) as u32;
+                cmap_entries.push((codepoint, glyph_count));
+                glyph_count += 1;
+                glyph_names.push(format!("U+{:x>04}", codepoint));
+
+                if args.trim {
+                    let mut min_x = glyph_width;
+                    let mut max_x = 0;
+                    for y in 0..glyph_height {
+                        for x in 0..glyph_width {
+                            let px = x0 + x;
+                            let py = y0 + y;
+                            if px >= width || py >= height {
+                                continue;
+                            }
+                            let pixel = image.get_pixel(px, py);
+                            if pixel[3] != 0 {
+                                if x < min_x {
+                                    min_x = x;
+                                }
+                                if x > max_x {
+                                    max_x = x;
+                                }
+                            }
+                        }
+                    }
+                    let trimmed_width = if min_x > max_x {
+                        0
+                    } else {
+                        max_x - min_x + 1 + args.trim_pad
+                    };
+                    let scaled_width =
+                        ((trimmed_width as f64) * (64.0 / glyph_width as f64)).round() as u16;
+                    glyph_widths.push(scaled_width);
+                } else {
+                    glyph_widths.push(64);
+                }
+            }
+        }
+    }
+
+    if glyph_count <= 3 {
+        panic!(
+            "No valid layer found. Parsable layer names must start with U+ and be valid Unicode."
+        );
+    }
+
+    // head table
+    let head = Head::new(
+        Fixed::from(0),
+        0,
+        0b0000000000001011,
+        64,
+        LongDateTime::new(Utc::now().timestamp()),
+        LongDateTime::new(Utc::now().timestamp()),
+        0,
+        -16,
+        64,
+        48,
+        MacStyle::empty(),
+        8,
+        0,
+    );
+    builder.add_table(&head).unwrap();
+
+    // name table
+    let font_name = args.name.unwrap_or(file_stem.clone());
+    let mut name_records = Vec::new();
+    for i in 0..1 {
+        let platform_id = match i {
+            0 => PlatformId::Macintosh,
+            1 => PlatformId::Windows,
+            _ => unreachable!(),
+        } as u16;
+
+        let encoding_id = match i {
+            0 => 0,
+            1 => 1,
+            _ => unreachable!(),
+        };
+
+        // 0: copyright
+        if let Some(copyright) = args.copyright.clone() {
+            name_records.push(NameRecord {
+                platform_id: platform_id,
+                encoding_id: encoding_id,
+                language_id: 0,
+                name_id: NameId::from(0),
+                string: OffsetMarker::new(copyright),
+            });
+        }
+
+        // 1: font family name
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(1),
+            string: OffsetMarker::new(font_name.clone()),
+        });
+
+        // 2: subfamily name
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(2),
+            string: OffsetMarker::new(args.family.clone().unwrap_or("Regular".to_string())),
+        });
+
+        // 3: identifier
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(3),
+            string: OffsetMarker::new(format!("ase2ttf: {}", font_name.clone())),
+        });
+
+        // 4: font name
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(4),
+            string: OffsetMarker::new(font_name.clone()),
+        });
+
+        // 5: version
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(5),
+            string: OffsetMarker::new(format!(
+                "Version {}",
+                args.font_version.clone().unwrap_or("1.0".to_string())
+            )),
+        });
+
+        // 6: PostScript name
+        name_records.push(NameRecord {
+            platform_id: platform_id,
+            encoding_id: encoding_id,
+            language_id: 0,
+            name_id: NameId::from(6),
+            string: OffsetMarker::new(font_name.clone()),
+        });
+    }
+
+    let name = Name::new(name_records);
+    builder.add_table(&name).unwrap();
+
+    // OS/2 table
+    let os2 = Os2 {
+        x_avg_char_width: 31,
+        us_weight_class: 400,
+        us_width_class: 5,
+        fs_type: 0b0000_0000_0000_0000,
+        y_subscript_x_size: 32,
+        y_subscript_y_size: 32,
+        y_subscript_x_offset: 0,
+        y_subscript_y_offset: 32,
+        y_superscript_x_size: 32,
+        y_superscript_y_size: 32,
+        y_superscript_x_offset: 0,
+        y_superscript_y_offset: 32,
+        y_strikeout_size: 8,
+        y_strikeout_position: 24,
+        s_family_class: 0,
+        panose_10: [0; 10],
+        ul_unicode_range_1: 0,
+        ul_unicode_range_2: 0,
+        ul_unicode_range_3: 0,
+        ul_unicode_range_4: 0,
+        ach_vend_id: Tag::from_u32(0),
+        fs_selection: SelectionFlags::empty(),
+        us_first_char_index: 0,
+        us_last_char_index: 57,
+        s_typo_ascender: 48,
+        s_typo_descender: -16,
+        s_typo_line_gap: 0,
+        us_win_ascent: 48,
+        us_win_descent: 16,
+        ul_code_page_range_1: Default::default(),
+        ul_code_page_range_2: Default::default(),
+        sx_height: Default::default(),
+        s_cap_height: Default::default(),
+        us_default_char: Default::default(),
+        us_break_char: Default::default(),
+        us_max_context: Default::default(),
+        us_lower_optical_point_size: Default::default(),
+        us_upper_optical_point_size: Default::default(),
+    };
+    builder.add_table(&os2).unwrap();
+
+    // maxp table
+    let maxp = Maxp::new(glyph_count);
+    builder.add_table(&maxp).unwrap();
+
+    // post table
+    let glyph_name_refs: Vec<&str> = glyph_names.iter().map(|s| s.as_str()).collect();
+    let post = Post::new_v2(glyph_name_refs);
+    builder.add_table(&post).unwrap();
+
+    // cmap table
+    let mut start_code = Vec::new();
+    let mut end_code = Vec::new();
+    let mut id_delta = Vec::new();
+    let mut id_range_offsets = Vec::new();
+    let glyph_id_array = Vec::new();
+    for (codepoint, glyph_id) in &cmap_entries {
+        let unicode = *codepoint as u16;
+        start_code.push(unicode);
+        end_code.push(unicode);
+        id_delta.push((*glyph_id as i32 - unicode as i32) as i16);
+        id_range_offsets.push(0);
+    }
+    start_code.push(0xFFFF);
+    end_code.push(0xFFFF);
+    id_delta.push(1);
+    id_range_offsets.push(0);
+
+    let subtable = CmapSubtable::format_4(
+        0,
+        end_code,
+        start_code,
+        id_delta,
+        id_range_offsets,
+        glyph_id_array,
+    );
+
+    let cmap = Cmap::new(vec![
+        EncodingRecord {
+            platform_id: PlatformId::Unicode,
+            encoding_id: 3,
+            subtable: OffsetMarker::new(subtable.clone()),
+        },
+        EncodingRecord {
+            platform_id: PlatformId::Macintosh,
+            encoding_id: 0,
+            subtable: OffsetMarker::new(subtable.clone()),
+        },
+        EncodingRecord {
+            platform_id: PlatformId::Windows,
+            encoding_id: 1,
+            subtable: OffsetMarker::new(subtable),
+        },
+    ]);
+    builder.add_table(&cmap).unwrap();
+
+    // hhea table
+    let hhea = Hhea::new(
+        48.into(),
+        (-16).into(),
+        0.into(),
+        64.into(),
+        0.into(),
+        0.into(),
+        64.into(),
+        1,
+        0,
+        0,
+        glyph_count,
+    );
+    builder.add_table(&hhea).unwrap();
+
+    // hmtx table
+    let hmtx = Hmtx::new(
+        glyph_widths
+            .iter()
+            .map(|x| LongMetric::new(*x, 8))
+            .collect(),
+        vec![],
+    );
+    builder.add_table(&hmtx).unwrap();
+
+    // glyf / loca table
+    let (glyf, loca, _) = glyf_builder.build();
+    builder.add_table(&glyf).unwrap();
+    builder.add_table(&loca).unwrap();
+
+    // export .ttf file
+    let bytes = builder.build();
+    let mut file = File::create(args.output.unwrap_or(format!("{0}.ttf", file_stem))).unwrap();
+    file.write_all(&bytes).expect("Failed to write file.");
+    file.flush().expect("Failed to write file.");
+}
