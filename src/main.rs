@@ -45,6 +45,9 @@ struct Args {
     #[arg(long)]
     font_version: Option<String>,
 
+    #[arg(long, require_equals = true)]
+    font_weight: Option<u16>,
+
     #[arg(long, require_equals = true, default_value_t = 16)]
     glyph_width: u32,
 
@@ -323,7 +326,28 @@ fn generate_ttf(args: Args) {
     // OS/2 table
     let os2 = Os2 {
         x_avg_char_width: 31,
-        us_weight_class: 400,
+        us_weight_class: if let Some(weight_class) = args.font_weight {
+            weight_class
+        } else {
+            match args
+                .family
+                .as_deref()
+                .unwrap_or("regular")
+                .to_lowercase()
+                .as_str()
+            {
+                "thin" => 100,
+                "extra-light" | "extralight" | "ultra-light" | "ultralight" => 200,
+                "light" => 300,
+                "regular" => 400,
+                "medium" => 500,
+                "semibold" | "semi-bold" | "demi-bold" | "demibold" => 600,
+                "bold" => 700,
+                "extrabold" | "extra-bold" | "ultrabold" | "ultra-bold" => 800,
+                "black" | "heavy" => 900,
+                _ => 400,
+            }
+        },
         us_width_class: 5,
         fs_type: 0b0000_0000_0000_0000,
         y_subscript_x_size: 32,
