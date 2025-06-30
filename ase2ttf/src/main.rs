@@ -57,10 +57,10 @@ fn main() {
             family: args.family,
             font_version: args.font_version,
             font_weight: args.font_weight,
-            glyph_width: args.glyph_width,
-            glyph_height: args.glyph_height,
-            trim: args.trim,
-            trim_pad: args.trim_pad,
+            glyph_width: Some(args.glyph_width),
+            glyph_height: Some(args.glyph_height),
+            trim: Some(args.trim),
+            trim_pad: Some(args.trim_pad),
         },
     ).unwrap();
 

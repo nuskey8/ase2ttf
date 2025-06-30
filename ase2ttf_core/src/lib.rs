@@ -32,10 +32,10 @@ pub struct Params {
     pub family: Option<String>,
     pub font_version: Option<String>,
     pub font_weight: Option<u16>,
-    pub glyph_width: u32,
-    pub glyph_height: u32,
-    pub trim: bool,
-    pub trim_pad: u32,
+    pub glyph_width: Option<u32>,
+    pub glyph_height: Option<u32>,
+    pub trim: Option<bool>,
+    pub trim_pad: Option<u32>,
 }
 
 #[wasm_bindgen]
@@ -48,10 +48,10 @@ impl Params {
         family: Option<String>,
         font_version: Option<String>,
         font_weight: Option<u16>,
-        glyph_width: u32,
-        glyph_height: u32,
-        trim: bool,
-        trim_pad: u32,
+        glyph_width: Option<u32>,
+        glyph_height: Option<u32>,
+        trim: Option<bool>,
+        trim_pad: Option<u32>,
     ) -> Params {
         Params {
             file_path,
@@ -114,8 +114,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let ase = AsepriteFile::read(ase_bytes).map_err(|e| Error::new(e.to_string()))?;
 
     // params
-    let glyph_width = args.glyph_width;
-    let glyph_height = args.glyph_height;
+    let glyph_width = args.glyph_width.unwrap_or(8);
+    let glyph_height = args.glyph_height.unwrap_or(8);
     let scale_x = 64.0 / glyph_width as f64;
     let scale_y = 64.0 / glyph_height as f64;
     let file_stem = Path::new(&args.file_path)
@@ -219,7 +219,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                 glyph_count += 1;
                 glyph_names.push(format!("U+{:x>04}", codepoint));
 
-                if args.trim {
+                if args.trim.unwrap_or(true) {
                     let mut min_x = glyph_width;
                     let mut max_x = 0;
                     for y in 0..glyph_height {
@@ -243,7 +243,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     let trimmed_width = if min_x > max_x {
                         0
                     } else {
-                        max_x - min_x + 1 + args.trim_pad
+                        max_x - min_x + 1 + args.trim_pad.unwrap_or(1)
                     };
                     let scaled_width =
                         ((trimmed_width as f64) * (64.0 / glyph_width as f64)).round() as u16;
