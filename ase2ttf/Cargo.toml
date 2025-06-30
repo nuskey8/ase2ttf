@@ -12,8 +12,5 @@ categories = ["command-line-utilities"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
-asefile = "0.3.8"
-chrono = "0.4.41"
+ase2ttf_core = { path = "../ase2ttf_core" }
 clap = { version = "4.5.40", features = ["derive"] }
-kurbo = "0.11.2"
-write-fonts = "0.39.0"

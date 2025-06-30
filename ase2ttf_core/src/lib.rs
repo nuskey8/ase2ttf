@@ -1,10 +1,9 @@
 use asefile::AsepriteFile;
 use chrono::Utc;
-use clap::Parser;
 use kurbo::BezPath;
-use std::fs::File;
-use std::io::Write;
+use std::fmt::{Debug, Display};
 use std::path::Path;
+use wasm_bindgen::prelude::*;
 use write_fonts::tables::cmap::{Cmap, CmapSubtable, EncodingRecord};
 use write_fonts::tables::glyf::{GlyfLocaBuilder, Glyph};
 use write_fonts::tables::hhea::Hhea;
@@ -25,61 +24,106 @@ use write_fonts::{
     types::{Fixed, LongDateTime, NameId},
 };
 
-#[derive(Parser, Debug)]
-#[command(version = "0.1.0", about, long_about = None)]
-struct Args {
-    path: String,
-
-    #[arg(short, long)]
-    output: Option<String>,
-
-    #[arg(long)]
-    copyright: Option<String>,
-
-    #[arg(long)]
-    name: Option<String>,
-
-    #[arg(long)]
-    family: Option<String>,
-
-    #[arg(long)]
-    font_version: Option<String>,
-
-    #[arg(long, require_equals = true)]
-    font_weight: Option<u16>,
-
-    #[arg(long, require_equals = true, default_value_t = 16)]
-    glyph_width: u32,
-
-    #[arg(long, require_equals = true, default_value_t = 16)]
-    glyph_height: u32,
-
-    #[arg(long, default_value_t = false)]
-    trim: bool,
-
-    #[arg(long, require_equals = true, default_value_t = 1)]
-    trim_pad: u32,
+#[wasm_bindgen(getter_with_clone)]
+pub struct Params {
+    pub file_path: String,
+    pub copyright: Option<String>,
+    pub name: Option<String>,
+    pub family: Option<String>,
+    pub font_version: Option<String>,
+    pub font_weight: Option<u16>,
+    pub glyph_width: u32,
+    pub glyph_height: u32,
+    pub trim: bool,
+    pub trim_pad: u32,
 }
 
-fn main() {
-    let args = Args::parse();
-    generate_ttf(args);
+#[wasm_bindgen]
+impl Params {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        file_path: String,
+        copyright: Option<String>,
+        name: Option<String>,
+        family: Option<String>,
+        font_version: Option<String>,
+        font_weight: Option<u16>,
+        glyph_width: u32,
+        glyph_height: u32,
+        trim: bool,
+        trim_pad: u32,
+    ) -> Params {
+        Params {
+            file_path,
+            copyright,
+            name,
+            family,
+            font_version,
+            font_weight,
+            glyph_width,
+            glyph_height,
+            trim,
+            trim_pad,
+        }
+    }
 }
 
-fn generate_ttf(args: Args) {
-    // open file
-    let file = Path::new(&args.path);
-    let ase = AsepriteFile::read_file(&file).expect(&format!(
-        "Could not load aseprite file \"{}\".",
-        args.path.clone()
-    ));
+#[wasm_bindgen(getter_with_clone)]
+pub struct Error {
+    pub message: String,
+}
+
+impl Error {
+    pub fn new(message: String) -> Error {
+        Error { message: message }
+    }
+}
+
+impl Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
+}
+
+#[wasm_bindgen]
+pub fn generate_ttf_js(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, JsValue> {
+    generate_ttf(ase_bytes, args).map_err(|x| x.into())
+}
+
+pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
+    let ase = AsepriteFile::read(ase_bytes).map_err(|e| Error::new(e.to_string()))?;
 
     // params
     let glyph_width = args.glyph_width;
     let glyph_height = args.glyph_height;
     let scale_x = 64.0 / glyph_width as f64;
     let scale_y = 64.0 / glyph_height as f64;
-    let file_stem = file.file_stem().unwrap().to_str().unwrap().to_string();
+    let file_stem = Path::new(&args.file_path)
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // validate size
     let width = ase.width() as u32;
@@ -212,9 +256,10 @@ fn generate_ttf(args: Args) {
     }
 
     if glyph_count <= 3 {
-        panic!(
+        return Err(Error::new(
             "No valid layer found. Parsable layer names must start with U+ and be valid Unicode."
-        );
+                .to_string(),
+        ));
     }
 
     // head table
@@ -233,7 +278,9 @@ fn generate_ttf(args: Args) {
         8,
         0,
     );
-    builder.add_table(&head).unwrap();
+    builder
+        .add_table(&head)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // name table
     let font_name = args.name.unwrap_or(file_stem.clone());
@@ -321,7 +368,9 @@ fn generate_ttf(args: Args) {
     }
 
     let name = Name::new(name_records);
-    builder.add_table(&name).unwrap();
+    builder
+        .add_table(&name)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // OS/2 table
     let os2 = Os2 {
@@ -385,16 +434,22 @@ fn generate_ttf(args: Args) {
         us_lower_optical_point_size: Default::default(),
         us_upper_optical_point_size: Default::default(),
     };
-    builder.add_table(&os2).unwrap();
+    builder
+        .add_table(&os2)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // maxp table
     let maxp = Maxp::new(glyph_count);
-    builder.add_table(&maxp).unwrap();
+    builder
+        .add_table(&maxp)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // post table
     let glyph_name_refs: Vec<&str> = glyph_names.iter().map(|s| s.as_str()).collect();
     let post = Post::new_v2(glyph_name_refs);
-    builder.add_table(&post).unwrap();
+    builder
+        .add_table(&post)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // cmap table
     let mut start_code = Vec::new();
@@ -440,7 +495,9 @@ fn generate_ttf(args: Args) {
             subtable: OffsetMarker::new(subtable),
         },
     ]);
-    builder.add_table(&cmap).unwrap();
+    builder
+        .add_table(&cmap)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // hhea table
     let hhea = Hhea::new(
@@ -456,7 +513,9 @@ fn generate_ttf(args: Args) {
         0,
         glyph_count,
     );
-    builder.add_table(&hhea).unwrap();
+    builder
+        .add_table(&hhea)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // hmtx table
     let hmtx = Hmtx::new(
@@ -466,16 +525,18 @@ fn generate_ttf(args: Args) {
             .collect(),
         vec![],
     );
-    builder.add_table(&hmtx).unwrap();
+    builder
+        .add_table(&hmtx)
+        .map_err(|e| Error::new(e.to_string()))?;
 
     // glyf / loca table
     let (glyf, loca, _) = glyf_builder.build();
-    builder.add_table(&glyf).unwrap();
-    builder.add_table(&loca).unwrap();
+    builder
+        .add_table(&glyf)
+        .map_err(|e| Error::new(e.to_string()))?;
+    builder
+        .add_table(&loca)
+        .map_err(|e| Error::new(e.to_string()))?;
 
-    // export .ttf file
-    let bytes = builder.build();
-    let mut file = File::create(args.output.unwrap_or(format!("{0}.ttf", file_stem))).unwrap();
-    file.write_all(&bytes).expect("Failed to write file.");
-    file.flush().expect("Failed to write file.");
+    Ok(builder.build())
 }
