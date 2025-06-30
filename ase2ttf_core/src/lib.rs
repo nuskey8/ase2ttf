@@ -28,8 +28,8 @@ use write_fonts::{
 pub struct Params {
     pub file_path: String,
     pub copyright: Option<String>,
-    pub name: Option<String>,
     pub family: Option<String>,
+    pub subfamily: Option<String>,
     pub font_version: Option<String>,
     pub font_weight: Option<u16>,
     pub glyph_width: Option<u32>,
@@ -44,8 +44,8 @@ impl Params {
     pub fn new(
         file_path: String,
         copyright: Option<String>,
-        name: Option<String>,
         family: Option<String>,
+        subfamily: Option<String>,
         font_version: Option<String>,
         font_weight: Option<u16>,
         glyph_width: Option<u32>,
@@ -56,8 +56,8 @@ impl Params {
         Params {
             file_path,
             copyright,
-            name,
             family,
+            subfamily,
             font_version,
             font_weight,
             glyph_width,
@@ -283,7 +283,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // name table
-    let font_name = args.name.unwrap_or(file_stem.clone());
+    let font_name = args.family.unwrap_or(file_stem.clone());
     let mut name_records = Vec::new();
     for i in 0..1 {
         let platform_id = match i {
@@ -324,7 +324,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: 0,
             name_id: NameId::from(2),
-            string: OffsetMarker::new(args.family.clone().unwrap_or("Regular".to_string())),
+            string: OffsetMarker::new(args.subfamily.clone().unwrap_or("Regular".to_string())),
         });
 
         // 3: identifier
@@ -379,7 +379,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             weight_class
         } else {
             match args
-                .family
+                .subfamily
                 .as_deref()
                 .unwrap_or("regular")
                 .to_lowercase()

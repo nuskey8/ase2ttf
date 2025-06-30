@@ -19,10 +19,10 @@ struct Args {
     copyright: Option<String>,
 
     #[arg(long)]
-    name: Option<String>,
+    family: Option<String>,
 
     #[arg(long)]
-    family: Option<String>,
+    subfamily: Option<String>,
 
     #[arg(long)]
     font_version: Option<String>,
@@ -53,8 +53,8 @@ fn main() {
         Params {
             file_path: args.path.clone(),
             copyright: args.copyright,
-            name: args.name,
             family: args.family,
+            subfamily: args.subfamily,
             font_version: args.font_version,
             font_weight: args.font_weight,
             glyph_width: Some(args.glyph_width),
@@ -62,7 +62,8 @@ fn main() {
             trim: Some(args.trim),
             trim_pad: Some(args.trim_pad),
         },
-    ).unwrap();
+    )
+    .unwrap();
 
     let file_stem = Path::new(&args.path)
         .file_stem()
