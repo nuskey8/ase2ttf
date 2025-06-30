@@ -114,8 +114,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let ase = AsepriteFile::read(ase_bytes).map_err(|e| Error::new(e.to_string()))?;
 
     // params
-    let glyph_width = args.glyph_width.unwrap_or(8);
-    let glyph_height = args.glyph_height.unwrap_or(8);
+    let glyph_width = args.glyph_width.unwrap_or(16);
+    let glyph_height = args.glyph_height.unwrap_or(16);
     let scale_x = 64.0 / glyph_width as f64;
     let scale_y = 64.0 / glyph_height as f64;
     let file_stem = Path::new(&args.file_path)
