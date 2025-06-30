@@ -142,6 +142,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let mut glyph_widths = vec![];
     let mut glyph_names = vec![];
     let mut glyph_count = 0;
+    let mut max_point = 0;
+    let mut max_contours = 0;
 
     // add .notdef / null / space
     glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
@@ -177,7 +179,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         for row in 0..rows {
             for col in 0..cols {
                 let mut path = BezPath::new();
-                let mut is_empty = true;
+                let mut point = 0;
+                let mut contours = 0;
                 let x0 = col * glyph_width;
                 let y0 = row * glyph_height;
 
@@ -193,8 +196,6 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                             continue;
                         }
 
-                        is_empty = false;
-
                         let x0 = x as f64 * scale_x;
                         let y0 = (glyph_height - y) as f64 * scale_y - 24.0;
                         let x1 = (x + 1) as f64 * scale_x;
@@ -204,10 +205,13 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                         path.line_to((x1, y1));
                         path.line_to((x0, y1));
                         path.close_path();
+
+                        point += 4;
+                        contours += 1;
                     }
                 }
 
-                if is_empty {
+                if point == 0 {
                     continue;
                 }
 
@@ -218,6 +222,13 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                 cmap_entries.push((codepoint, glyph_count));
                 glyph_count += 1;
                 glyph_names.push(format!("U+{:x>04}", codepoint));
+
+                max_point = if point > max_point { point } else { max_point };
+                max_contours = if contours > max_contours {
+                    contours
+                } else {
+                    max_contours
+                };
 
                 if args.trim.unwrap_or(true) {
                     let mut min_x = glyph_width;
@@ -439,7 +450,22 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // maxp table
-    let maxp = Maxp::new(glyph_count);
+    let maxp = Maxp {
+        num_glyphs: glyph_count,
+        max_points: Some(max_point),
+        max_contours: Some(max_contours),
+        max_composite_points: Some(0),
+        max_composite_contours: Some(0),
+        max_zones: Some(2),
+        max_twilight_points: Some(0),
+        max_storage: Some(1),
+        max_function_defs: Some(1),
+        max_instruction_defs: Some(0),
+        max_stack_elements: Some(64),
+        max_size_of_instructions: Some(0),
+        max_component_elements: Some(0),
+        max_component_depth: Some(0),
+    };
     builder
         .add_table(&maxp)
         .map_err(|e| Error::new(e.to_string()))?;
