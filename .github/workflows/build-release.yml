@@ -1,0 +1,30 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build release
+        run: cargo build --release --manifest-path ase2ttf/Cargo.toml
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ase2ttf-${{ matrix.os }}
+          path: |
+            ase2ttf/target/release/ase2ttf*
+            !**/*.d
+            !**/*.rlib
+            !**/*.dSYM/**
