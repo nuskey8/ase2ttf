@@ -2,6 +2,7 @@
 name = "ase2ttf_core"
 version = "0.1.0"
 edition = "2024"
+description = "ase2ttf core crate"
 authors = ["nuskey"]
 license = "Apache-2.0"
 repository = "https://github.com/nuskey8/ase2ttf"
