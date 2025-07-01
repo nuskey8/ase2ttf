@@ -6,15 +6,15 @@ description = "A Command-line tool for creating pixel fonts from Aseprite files"
 authors = ["nuskey"]
 license = "Apache-2.0"
 repository = "https://github.com/nuskey8/ase2ttf"
-readme = "README.md"
+readme = "../README.md"
 keywords = ["aseprite", "font", "cli"]
 categories = ["command-line-utilities"]
-include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
+include = ["/Cargo.toml", "../LICENSE", "../README.md", "/src/**"]
 
 [[bin]]
 name = "ase2ttf"
 path = "src/main.rs"
 
 [dependencies]
-ase2ttf_core = { path = "../ase2ttf_core" }
+ase2ttf_core = { version = "0.1.0", path = "../ase2ttf_core" }
 clap = { version = "4.5.40", features = ["derive"] }
