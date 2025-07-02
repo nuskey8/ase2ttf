@@ -24,6 +24,10 @@ use write_fonts::{
     types::{Fixed, LongDateTime, NameId},
 };
 
+use crate::edge::get_edges;
+
+mod edge;
+
 #[wasm_bindgen(getter_with_clone)]
 pub struct Params {
     pub file_path: String,
@@ -142,8 +146,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let mut glyph_widths = vec![];
     let mut glyph_names = vec![];
     let mut glyph_count = 0;
-    let mut max_point = 0;
-    let mut max_contours = 0;
+    let mut max_point: u16 = 0;
+    let mut max_contour_count: u16 = 0;
 
     // add .notdef / null / space
     glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
@@ -178,12 +182,10 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         let rows = height / glyph_height;
         for row in 0..rows {
             for col in 0..cols {
-                let mut path = BezPath::new();
-                let mut point = 0;
-                let mut contours = 0;
                 let x0 = col * glyph_width;
                 let y0 = row * glyph_height;
 
+                let mut bitmap = vec![0.0f64; (glyph_width * glyph_height) as usize];
                 for y in 0..glyph_height {
                     for x in 0..glyph_width {
                         let px = x0 + x;
@@ -192,22 +194,37 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                             continue;
                         }
                         let pixel = image.get_pixel(px, py);
-                        if pixel[3] == 0 {
+                        bitmap[(y * glyph_width + x) as usize] = pixel[3] as f64 / 256.0;
+                    }
+                }
+
+                let mut point: u16 = 0;
+                let mut contour_count: u16 = 0;
+                let mut path = BezPath::new();
+
+                let boundaries = get_edges(&bitmap, glyph_width as usize, glyph_height as usize);
+                for edges in boundaries.values() {
+                    let paths = crate::edge::edges_to_paths(edges);
+                    for path_points in paths {
+                        if path_points.is_empty() {
                             continue;
                         }
-
-                        let x0 = x as f64 * scale_x;
-                        let y0 = (glyph_height - y) as f64 * scale_y - 24.0;
-                        let x1 = (x + 1) as f64 * scale_x;
-                        let y1 = (glyph_height - y + 1) as f64 * scale_y - 24.0;
-                        path.move_to((x0, y0));
-                        path.line_to((x1, y0));
-                        path.line_to((x1, y1));
-                        path.line_to((x0, y1));
-                        path.close_path();
-
-                        point += 4;
-                        contours += 1;
+                        let mut iter = path_points.iter();
+                        if let Some(&(x0, y0)) = iter.next() {
+                            path.move_to((
+                                x0 as f64 * scale_x,
+                                (glyph_height as usize - y0) as f64 * scale_y - 24.0,
+                            ));
+                            for &(x, y) in iter {
+                                path.line_to((
+                                    x as f64 * scale_x,
+                                    (glyph_height as usize - y) as f64 * scale_y - 24.0,
+                                ));
+                                point += 1;
+                            }
+                            path.close_path();
+                            contour_count += 1;
+                        }
                     }
                 }
 
@@ -224,10 +241,10 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                 glyph_names.push(format!("U+{:x>04}", codepoint));
 
                 max_point = if point > max_point { point } else { max_point };
-                max_contours = if contours > max_contours {
-                    contours
+                max_contour_count = if contour_count > max_contour_count {
+                    contour_count
                 } else {
-                    max_contours
+                    max_contour_count
                 };
 
                 if args.trim.unwrap_or(true) {
@@ -453,7 +470,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let maxp = Maxp {
         num_glyphs: glyph_count,
         max_points: Some(max_point),
-        max_contours: Some(max_contours),
+        max_contours: Some(max_contour_count),
         max_composite_points: Some(0),
         max_composite_contours: Some(0),
         max_zones: Some(2),
