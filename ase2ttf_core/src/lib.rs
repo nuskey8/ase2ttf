@@ -41,6 +41,7 @@ pub struct Params {
     pub trim: Option<bool>,
     pub trim_pad: Option<u32>,
     pub line_gap: Option<u8>,
+    pub baseline: Option<u8>,
 }
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
@@ -58,6 +59,7 @@ impl Params {
         trim: Option<bool>,
         trim_pad: Option<u32>,
         line_gap: Option<u8>,
+        baseline: Option<u8>,
     ) -> Params {
         Params {
             file_path,
@@ -71,6 +73,7 @@ impl Params {
             trim,
             trim_pad,
             line_gap,
+            baseline,
         }
     }
 }
@@ -546,10 +549,12 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // hhea table
+    let base_line = (args.baseline.unwrap_or(2) as f64 * scale).round() as i16;
+    let line_gap = (args.line_gap.unwrap_or(0) as f64 * scale).round() as i16;
     let hhea = Hhea::new(
-        48.into(),
-        (-16).into(),
-        ((args.line_gap.unwrap_or(0) as f64 * scale).round() as i16).into(),
+        (64 - base_line).into(),
+        (-base_line).into(),
+        line_gap.into(),
         64.into(),
         0.into(),
         0.into(),
