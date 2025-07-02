@@ -11,7 +11,7 @@ use write_fonts::tables::maxp::Maxp;
 use write_fonts::tables::os2::{Os2, SelectionFlags};
 use write_fonts::tables::post::Post;
 use write_fonts::tables::vmtx::LongMetric;
-use write_fonts::types::{Tag};
+use write_fonts::types::{FWord, Tag};
 use write_fonts::{
     OffsetMarker,
     tables::{
@@ -40,6 +40,10 @@ pub struct Params {
     pub glyph_height: Option<u32>,
     pub trim: Option<bool>,
     pub trim_pad: Option<u32>,
+    pub line_gap: Option<u8>,
+    pub baseline: Option<i16>,
+    pub underline_position: Option<i16>,
+    pub underline_thickness: Option<i16>,
 }
 
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
@@ -56,6 +60,10 @@ impl Params {
         glyph_height: Option<u32>,
         trim: Option<bool>,
         trim_pad: Option<u32>,
+        line_gap: Option<u8>,
+        baseline: Option<i16>,
+        underline_position: Option<i16>,
+        underline_thickness: Option<i16>,
     ) -> Params {
         Params {
             file_path,
@@ -68,6 +76,10 @@ impl Params {
             glyph_height,
             trim,
             trim_pad,
+            line_gap,
+            baseline,
+            underline_position,
+            underline_thickness,
         }
     }
 }
@@ -489,7 +501,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
     // post table
     let glyph_name_refs: Vec<&str> = glyph_names.iter().map(|s| s.as_str()).collect();
-    let post = Post::new_v2(glyph_name_refs);
+    let mut post = Post::new_v2(glyph_name_refs);
+    post.underline_position = FWord::new((args.underline_position.unwrap_or(0) as f64 * scale) as i16);
+    post.underline_thickness = FWord::new((args.underline_thickness.unwrap_or(1) as f64 * scale) as i16);
     builder
         .add_table(&post)
         .map_err(|e| Error::new(e.to_string()))?;
@@ -543,10 +557,12 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // hhea table
+    let base_line = (args.baseline.unwrap_or(2) as f64 * scale).round() as i16;
+    let line_gap = (args.line_gap.unwrap_or(0) as f64 * scale).round() as i16;
     let hhea = Hhea::new(
-        48.into(),
-        (-16).into(),
-        0.into(),
+        (64 - base_line).into(),
+        (-base_line).into(),
+        line_gap.into(),
         64.into(),
         0.into(),
         0.into(),
