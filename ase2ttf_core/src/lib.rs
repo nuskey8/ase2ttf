@@ -11,7 +11,7 @@ use write_fonts::tables::maxp::Maxp;
 use write_fonts::tables::os2::{Os2, SelectionFlags};
 use write_fonts::tables::post::Post;
 use write_fonts::tables::vmtx::LongMetric;
-use write_fonts::types::Tag;
+use write_fonts::types::{Tag};
 use write_fonts::{
     OffsetMarker,
     tables::{
@@ -121,8 +121,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // params
     let glyph_width = args.glyph_width.unwrap_or(16);
     let glyph_height = args.glyph_height.unwrap_or(16);
-    let scale_x = 64.0 / glyph_width as f64;
-    let scale_y = 64.0 / glyph_height as f64;
+    let scale = 64.0 / glyph_width as f64;
     let file_stem = Path::new(&args.file_path)
         .file_stem()
         .unwrap()
@@ -213,13 +212,13 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                         let mut iter = path_points.iter();
                         if let Some(&(x0, y0)) = iter.next() {
                             path.move_to((
-                                x0 as f64 * scale_x,
-                                (glyph_height as usize - y0) as f64 * scale_y - 24.0,
+                                x0 as f64 * scale,
+                                (glyph_height as usize - y0) as f64 * scale - 24.0,
                             ));
                             for &(x, y) in iter {
                                 path.line_to((
-                                    x as f64 * scale_x,
-                                    (glyph_height as usize - y) as f64 * scale_y - 24.0,
+                                    x as f64 * scale,
+                                    (glyph_height as usize - y) as f64 * scale - 24.0,
                                 ));
                                 point += 1;
                             }
