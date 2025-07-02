@@ -41,6 +41,18 @@ struct Args {
 
     #[arg(long, require_equals = true, default_value_t = 1)]
     trim_pad: u32,
+
+    #[arg(long, require_equals = true, default_value_t = 0)]
+    line_gap: u8,
+
+    #[arg(long, require_equals = true, default_value_t = 2)]
+    baseline: i16,
+
+    #[arg(long, require_equals = true, default_value_t = 0)]
+    underline_position: i16,
+
+    #[arg(long, require_equals = true, default_value_t = 1)]
+    underline_thickness: i16,
 }
 
 fn main() {
@@ -61,6 +73,10 @@ fn main() {
             glyph_height: Some(args.glyph_height),
             trim: Some(args.trim),
             trim_pad: Some(args.trim_pad),
+            line_gap: Some(args.line_gap),
+            baseline: Some(args.baseline),
+            underline_position: Some(args.underline_position),
+            underline_thickness: Some(args.underline_thickness),
         },
     )
     .unwrap();
