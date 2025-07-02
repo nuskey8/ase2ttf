@@ -94,7 +94,6 @@ dependencies = [
  "asefile",
  "chrono",
  "kurbo",
- "wasm-bindgen",
  "write-fonts",
 ]
 
