@@ -3,7 +3,6 @@ use chrono::Utc;
 use kurbo::BezPath;
 use std::fmt::{Debug, Display};
 use std::path::Path;
-use wasm_bindgen::prelude::*;
 use write_fonts::tables::cmap::{Cmap, CmapSubtable, EncodingRecord};
 use write_fonts::tables::glyf::{GlyfLocaBuilder, Glyph};
 use write_fonts::tables::hhea::Hhea;
@@ -24,11 +23,12 @@ use write_fonts::{
     types::{Fixed, LongDateTime, NameId},
 };
 
+#[cfg(feature = "wasm")] use wasm_bindgen::prelude::*;
+
 use crate::edge::get_edges;
 
 mod edge;
-
-#[wasm_bindgen(getter_with_clone)]
+#[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
 pub struct Params {
     pub file_path: String,
     pub copyright: Option<String>,
@@ -42,9 +42,9 @@ pub struct Params {
     pub trim_pad: Option<u32>,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 impl Params {
-    #[wasm_bindgen(constructor)]
+    #[cfg_attr(feature = "wasm", wasm_bindgen(constructor))]
     pub fn new(
         file_path: String,
         copyright: Option<String>,
@@ -72,7 +72,7 @@ impl Params {
     }
 }
 
-#[wasm_bindgen(getter_with_clone)]
+#[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
 pub struct Error {
     pub message: String,
 }
@@ -109,6 +109,7 @@ impl std::error::Error for Error {
     }
 }
 
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn generate_ttf_js(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, JsValue> {
     generate_ttf(ase_bytes, args).map_err(|x| x.into())
