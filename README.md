@@ -37,23 +37,29 @@ You can specify the path to the .aseprite file from the command line to create a
 
 ```text
 $ ase2ttf -h
+A Command-line tool for creating pixel fonts from Aseprite files
+
 Usage: ase2ttf [OPTIONS] <PATH>
 
 Arguments:
   <PATH>  
 
 Options:
-  -o, --output <OUTPUT>              
-      --copyright <COPYRIGHT>        
-      --family <FAMILY>              
-      --subfamily <SUBFAMILY>        
-      --font-version <FONT_VERSION>  
-      --font-weight=<FONT_WEIGHT>    
-      --glyph-width=<GLYPH_WIDTH>    [default: 16]
-      --glyph-height=<GLYPH_HEIGHT>  [default: 16]
-      --trim                         
-      --trim-pad=<TRIM_PAD>          [default: 1]
-  -h, --help                         Print help
-  -V, --version                      Print version
+  -o, --output <OUTPUT>                            
+      --copyright <COPYRIGHT>                      
+      --family <FAMILY>                            
+      --subfamily <SUBFAMILY>                      
+      --font-version <FONT_VERSION>                
+      --font-weight=<FONT_WEIGHT>                  
+      --glyph-width=<GLYPH_WIDTH>                  [default: 16]
+      --glyph-height=<GLYPH_HEIGHT>                [default: 16]
+      --trim                                       
+      --trim-pad=<TRIM_PAD>                        [default: 1]
+      --line-gap=<LINE_GAP>                        [default: 0]
+      --baseline=<BASELINE>                        [default: 2]
+      --underline-position=<UNDERLINE_POSITION>    [default: 0]
+      --underline-thickness=<UNDERLINE_THICKNESS>  [default: 1]
+  -h, --help                                       Print help
+  -V, --version                                    Print version
 ```
 
