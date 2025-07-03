@@ -26,7 +26,7 @@ use write_fonts::{
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-use crate::edge::{get_edges, group_grid_indices};
+use crate::edge::{get_edges};
 
 mod edge;
 #[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
@@ -326,25 +326,32 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // name table
     let font_name = args.family.unwrap_or(file_stem.clone());
     let mut name_records = Vec::new();
-    for i in 0..1 {
+    for i in 0..2 {
         let platform_id = match i {
             0 => PlatformId::Macintosh,
             1 => PlatformId::Windows,
             _ => unreachable!(),
-        } as u16;
+        };
 
-        let encoding_id = match i {
-            0 => 0,
-            1 => 1,
+        let encoding_id = match platform_id {
+            PlatformId::Macintosh => 0,
+            PlatformId::Windows => 1,
+            _ => unreachable!(),
+        };
+
+        // english
+        let language_id = match platform_id {
+            PlatformId::Macintosh => 0,
+            PlatformId::Windows => 0x0409,
             _ => unreachable!(),
         };
 
         // 0: copyright
         if let Some(copyright) = args.copyright.clone() {
             name_records.push(NameRecord {
-                platform_id: platform_id,
+                platform_id: platform_id as u16,
                 encoding_id: encoding_id,
-                language_id: 0,
+                language_id: language_id,
                 name_id: NameId::from(0),
                 string: OffsetMarker::new(copyright),
             });
@@ -352,45 +359,45 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
         // 1: font family name
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(1),
             string: OffsetMarker::new(font_name.clone()),
         });
 
         // 2: subfamily name
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(2),
             string: OffsetMarker::new(args.subfamily.clone().unwrap_or("Regular".to_string())),
         });
 
         // 3: identifier
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(3),
             string: OffsetMarker::new(format!("ase2ttf: {}", font_name.clone())),
         });
 
         // 4: font name
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(4),
             string: OffsetMarker::new(font_name.clone()),
         });
 
         // 5: version
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(5),
             string: OffsetMarker::new(format!(
                 "Version {}",
@@ -400,9 +407,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
         // 6: PostScript name
         name_records.push(NameRecord {
-            platform_id: platform_id,
+            platform_id: platform_id as u16,
             encoding_id: encoding_id,
-            language_id: 0,
+            language_id: language_id,
             name_id: NameId::from(6),
             string: OffsetMarker::new(font_name.clone()),
         });
