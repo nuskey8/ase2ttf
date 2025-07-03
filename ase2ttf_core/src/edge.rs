@@ -44,7 +44,7 @@ impl UnionFind {
     }
 }
 
-pub fn group_grid_indices(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<usize>> {
+fn group(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<usize>> {
     if width == 0 || height == 0 {
         return HashMap::new();
     }
@@ -87,7 +87,7 @@ pub fn group_grid_indices(grid: &[f64], width: usize, height: usize) -> HashMap<
 }
 
 pub fn get_edges(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<Line>> {
-    let group_map = group_grid_indices(&grid, width, height);
+    let group_map = group(&grid, width, height);
     let mut group_boundaries: HashMap<usize, Vec<Line>> = HashMap::new();
 
     for (root_id, indices) in group_map.iter() {
@@ -288,7 +288,7 @@ mod tests {
         println!("Group:");
         println!(
             "{:?}",
-            group_grid_indices(&Vec::from_iter(grid.clone()), 6, 5)
+            group(&Vec::from_iter(grid.clone()), 6, 5)
         );
 
         let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
