@@ -26,7 +26,7 @@ use write_fonts::{
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
-use crate::edge::{get_edges};
+use crate::edge::get_edges;
 
 mod edge;
 #[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
@@ -251,7 +251,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                 let codepoint = base_code + (row * cols + col) as u32;
                 cmap_entries.push((codepoint, glyph_count));
                 glyph_count += 1;
-                glyph_names.push(format!("U+{:x>04}", codepoint));
+                glyph_names.push(format!("U+{:04X}", codepoint));
 
                 max_point = if point > max_point { point } else { max_point };
                 max_contour_count = if contour_count > max_contour_count {
