@@ -401,10 +401,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: language_id,
             name_id: NameId::from(5),
-            string: OffsetMarker::new(format!(
-                "Version {}",
-                args.font_version.clone().unwrap_or("1.0".to_string())
-            )),
+            string: OffsetMarker::new(args.font_version.clone().unwrap_or("Version 1.0".to_string())),
         });
 
         // 6: PostScript name
