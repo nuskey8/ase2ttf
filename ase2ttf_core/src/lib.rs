@@ -23,9 +23,10 @@ use write_fonts::{
     types::{Fixed, LongDateTime, NameId},
 };
 
-#[cfg(feature = "wasm")] use wasm_bindgen::prelude::*;
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
 
-use crate::edge::get_edges;
+use crate::edge::{get_edges, group_grid_indices};
 
 mod edge;
 #[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
@@ -145,9 +146,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let width = ase.width() as u32;
     let height = ase.height() as u32;
     if width % glyph_width != 0 || height % glyph_height != 0 {
-        panic!(
-            "The height and width of the aseprite file must be multiples of glyph-width and glyph-height respectively."
-        )
+        return Err(Error::new(
+            "The height and width of the aseprite file must be multiples of glyph-width and glyph-height respectively.".to_string())
+        );
     }
 
     let mut builder = write_fonts::FontBuilder::new();
@@ -206,7 +207,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                             continue;
                         }
                         let pixel = image.get_pixel(px, py);
-                        bitmap[(y * glyph_width + x) as usize] = pixel[3] as f64 / 256.0;
+                        bitmap[(y * glyph_width + x) as usize] = pixel[3] as f64 / 255.0;
                     }
                 }
 
@@ -502,8 +503,10 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // post table
     let glyph_name_refs: Vec<&str> = glyph_names.iter().map(|s| s.as_str()).collect();
     let mut post = Post::new_v2(glyph_name_refs);
-    post.underline_position = FWord::new((args.underline_position.unwrap_or(0) as f64 * scale) as i16);
-    post.underline_thickness = FWord::new((args.underline_thickness.unwrap_or(1) as f64 * scale) as i16);
+    post.underline_position =
+        FWord::new((args.underline_position.unwrap_or(0) as f64 * scale) as i16);
+    post.underline_thickness =
+        FWord::new((args.underline_thickness.unwrap_or(1) as f64 * scale) as i16);
     builder
         .add_table(&post)
         .map_err(|e| Error::new(e.to_string()))?;

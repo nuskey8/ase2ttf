@@ -41,31 +41,31 @@ impl UnionFind {
     }
 }
 
-fn group_grid_indices(grid: &[f64], rows: usize, cols: usize) -> HashMap<usize, Vec<usize>> {
-    if rows == 0 || cols == 0 {
+pub fn group_grid_indices(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<usize>> {
+    if width == 0 || height == 0 {
         return HashMap::new();
     }
 
-    let n_cells = rows * cols;
+    let n_cells = width * height;
     let mut uf = UnionFind::new(n_cells);
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let current_idx = r * cols + c;
+    for x in 0..width {
+        for y in 0..height {
+            let current_idx = x + y * width;
             if grid[current_idx] > 0.0 {
                 // right
-                if c + 1 < cols {
-                    let right_idx = r * cols + (c + 1);
+                if x + 1 < width {
+                    let right_idx = current_idx + 1;
                     if grid[right_idx] > 0.0 {
                         uf.union(current_idx, right_idx);
                     }
                 }
 
                 // bottom
-                if r + 1 < rows {
-                    let down_idx = (r + 1) * cols + c;
-                    if grid[down_idx] > 0.0 {
-                        uf.union(current_idx, down_idx);
+                if y + 1 < height {
+                    let bottom_idx = current_idx + width;
+                    if grid[bottom_idx] > 0.0 {
+                        uf.union(current_idx, bottom_idx);
                     }
                 }
             }
@@ -85,10 +85,10 @@ fn group_grid_indices(grid: &[f64], rows: usize, cols: usize) -> HashMap<usize, 
 
 pub fn get_edges(
     grid: &[f64],
-    rows: usize,
-    cols: usize,
+    width: usize,
+    height: usize,
 ) -> HashMap<usize, Vec<((usize, usize), (usize, usize))>> {
-    let group_map = group_grid_indices(&grid, rows, cols);
+    let group_map = group_grid_indices(&grid, width, height);
     let mut group_boundaries: HashMap<usize, Vec<((usize, usize), (usize, usize))>> =
         HashMap::new();
 
@@ -96,24 +96,24 @@ pub fn get_edges(
         let mut lines: Vec<((usize, usize), (usize, usize))> = Vec::new();
 
         for &idx in indices {
-            let r = idx / cols;
-            let c = idx % cols;
+            let x = idx % width;
+            let y = idx / width;
 
             // top
-            if r == 0 || grid[(r - 1) * cols + c] == 0.0 {
-                lines.push(((c, r), (c + 1, r)));
+            if y == 0 || grid[idx - width] == 0.0 {
+                lines.push(((x, y), (x + 1, y)));
             }
             // bottom
-            if r == rows - 1 || grid[(r + 1) * cols + c] == 0.0 {
-                lines.push(((c, r + 1), (c + 1, r + 1)));
+            if y == height - 1 || grid[idx + width] == 0.0 {
+                lines.push(((x, y + 1), (x + 1, y + 1)));
             }
             // left
-            if c == 0 || grid[r * cols + (c - 1)] == 0.0 {
-                lines.push(((c, r), (c, r + 1)));
+            if x == 0 || grid[idx - 1] == 0.0 {
+                lines.push(((x, y), (x, y + 1)));
             }
             // right
-            if c == cols - 1 || grid[r * cols + (c + 1)] == 0.0 {
-                lines.push(((c + 1, r), (c + 1, r + 1)));
+            if x == width - 1 || grid[idx + 1] == 0.0 {
+                lines.push(((x + 1, y), (x + 1, y + 1)));
             }
         }
 
@@ -149,34 +149,6 @@ pub fn get_edges(
 }
 
 pub fn edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Vec<(usize, usize)>> {
-    let mut paths = group_edges_to_paths(edges);
-    let n = paths.len();
-    for i in 0..n {
-        let mut inside_count = 0;
-        for j in 0..n {
-            if i == j || paths[j].is_empty() {
-                continue;
-            }
-            if point_in_polygon(paths[i][0], &paths[j]) {
-                inside_count += 1;
-            }
-        }
-
-        let area = signed_area(&paths[i]);
-        if inside_count % 2 == 1 {
-            if area < 0.0 {
-                paths[i].reverse();
-            }
-        } else {
-            if area > 0.0 {
-                paths[i].reverse();
-            }
-        }
-    }
-    paths
-}
-
-fn group_edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Vec<(usize, usize)>> {
     let mut point_to_edges: HashMap<(usize, usize), Vec<(usize, usize)>> = HashMap::new();
     let mut edge_set: HashSet<((usize, usize), (usize, usize))> = HashSet::new();
 
@@ -232,6 +204,30 @@ fn group_edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Ve
             paths.push(path);
         }
     }
+
+    let n = paths.len();
+    for i in 0..n {
+        let mut inside_count = 0;
+        for j in 0..n {
+            if i == j || paths[j].is_empty() {
+                continue;
+            }
+            if point_in_polygon(paths[i][0], &paths[j]) {
+                inside_count += 1;
+            }
+        }
+
+        let area = signed_area(&paths[i]);
+        if inside_count % 2 == 1 {
+            if area < 0.0 {
+                paths[i].reverse();
+            }
+        } else {
+            if area > 0.0 {
+                paths[i].reverse();
+            }
+        }
+    }
     paths
 }
 
@@ -277,12 +273,11 @@ mod tests {
     #[test]
     fn sandbox() {
         let src = "
-------
--####-
--#--#-
--#--#-
--###--
-------
+--##--
+-##---
+##----
+-##---
+--##--
 "
         .trim()
         .replace("\n", "");
@@ -292,8 +287,15 @@ mod tests {
             .into_iter()
             .map(|x| if *x == b'#' { 1.0f64 } else { 0.0 });
 
-        let boundaries = get_edges(&Vec::from_iter(grid), 6, 6);
+        println!("Group:");
+        println!("{:?}", group_grid_indices(&Vec::from_iter(grid.clone()), 6, 5));
+        
+        let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
         let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
+        
+        println!("Path:");
+        println!("{:?}", paths);
+
         assert_eq!(paths.len(), 2);
 
         let areas: Vec<_> = paths.iter().map(|p| signed_area(p)).collect();
