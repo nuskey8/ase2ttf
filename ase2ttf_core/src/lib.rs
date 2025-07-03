@@ -135,6 +135,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let glyph_width = args.glyph_width.unwrap_or(16);
     let glyph_height = args.glyph_height.unwrap_or(16);
     let scale = 64.0 / glyph_width as f64;
+    let base_line = (args.baseline.unwrap_or(2) as f64 * scale).round() as i16;
+    let line_gap = (args.line_gap.unwrap_or(0) as f64 * scale).round() as i16;
     let file_stem = Path::new(&args.file_path)
         .file_stem()
         .unwrap()
@@ -226,12 +228,12 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                         if let Some(&(x0, y0)) = iter.next() {
                             path.move_to((
                                 x0 as f64 * scale,
-                                (glyph_height as usize - y0) as f64 * scale - 24.0,
+                                (glyph_height as usize - y0) as f64 * scale - base_line as f64,
                             ));
                             for &(x, y) in iter {
                                 path.line_to((
                                     x as f64 * scale,
-                                    (glyph_height as usize - y) as f64 * scale - 24.0,
+                                    (glyph_height as usize - y) as f64 * scale - base_line as f64,
                                 ));
                                 point += 1;
                             }
@@ -567,8 +569,6 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // hhea table
-    let base_line = (args.baseline.unwrap_or(2) as f64 * scale).round() as i16;
-    let line_gap = (args.line_gap.unwrap_or(0) as f64 * scale).round() as i16;
     let hhea = Hhea::new(
         (64 - base_line).into(),
         (-base_line).into(),
