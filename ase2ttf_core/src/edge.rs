@@ -194,6 +194,19 @@ pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
             }
         }
 
+        // separate inner loop
+        let mut visited_point = HashMap::new();
+        let mut l = path.len();
+        let mut i = 0;
+        while i < l - 1 {
+            let insert_ret = visited_point.insert(path[i], i);
+            if let Some(p) = insert_ret {
+                paths.push(path.drain(p..i).rev().collect());
+                l = path.len();
+            }
+            i += 1;
+        }
+
         // only closed paths
         if path.len() > 2 && path[0] == *path.last().unwrap() {
             paths.push(path);
@@ -286,10 +299,7 @@ mod tests {
             .map(|x| if *x == b'#' { 1.0f64 } else { 0.0 });
 
         println!("Group:");
-        println!(
-            "{:?}",
-            group(&Vec::from_iter(grid.clone()), 6, 5)
-        );
+        println!("{:?}", group(&Vec::from_iter(grid.clone()), 6, 5));
 
         let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
         let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
