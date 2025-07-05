@@ -327,7 +327,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // name table
-    let font_name = args.family.unwrap_or(file_stem.clone());
+    let family = args.family.unwrap_or(file_stem.clone());
     let mut name_records = Vec::new();
     for i in 0..2 {
         let platform_id = match i {
@@ -366,7 +366,11 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: language_id,
             name_id: NameId::from(1),
-            string: OffsetMarker::new(font_name.clone()),
+            string: OffsetMarker::new(if let Some(subfamily) = args.subfamily.clone() {
+                format!("{} {}", family, subfamily)
+            } else {
+                family.clone()
+            }),
         });
 
         // 2: subfamily name
@@ -384,7 +388,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: language_id,
             name_id: NameId::from(3),
-            string: OffsetMarker::new(format!("ase2ttf: {}", font_name.clone())),
+            string: OffsetMarker::new(format!("ase2ttf: {}", family.clone())),
         });
 
         // 4: font name
@@ -393,7 +397,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: language_id,
             name_id: NameId::from(4),
-            string: OffsetMarker::new(font_name.clone()),
+            string: OffsetMarker::new(family.clone()),
         });
 
         // 5: version
@@ -415,7 +419,25 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
             encoding_id: encoding_id,
             language_id: language_id,
             name_id: NameId::from(6),
-            string: OffsetMarker::new(font_name.clone()),
+            string: OffsetMarker::new(family.replace(" ", "-")),
+        });
+
+        // 16: Preferred family
+        name_records.push(NameRecord {
+            platform_id: platform_id as u16,
+            encoding_id: encoding_id,
+            language_id: language_id,
+            name_id: NameId::from(16),
+            string: OffsetMarker::new(family.clone()),
+        });
+
+        // 17: Preferred subfamily
+        name_records.push(NameRecord {
+            platform_id: platform_id as u16,
+            encoding_id: encoding_id,
+            language_id: language_id,
+            name_id: NameId::from(17),
+            string: OffsetMarker::new(args.subfamily.clone().unwrap_or("Regular".to_string())),
         });
     }
 
