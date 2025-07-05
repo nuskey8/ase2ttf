@@ -1,5 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
+type Point = (usize, usize);
+type Line = (Point, Point);
+
 struct UnionFind {
     parent: Vec<usize>,
     rank: Vec<usize>,
@@ -41,7 +44,7 @@ impl UnionFind {
     }
 }
 
-pub fn group_grid_indices(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<usize>> {
+fn group(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<usize>> {
     if width == 0 || height == 0 {
         return HashMap::new();
     }
@@ -83,17 +86,12 @@ pub fn group_grid_indices(grid: &[f64], width: usize, height: usize) -> HashMap<
     groups
 }
 
-pub fn get_edges(
-    grid: &[f64],
-    width: usize,
-    height: usize,
-) -> HashMap<usize, Vec<((usize, usize), (usize, usize))>> {
-    let group_map = group_grid_indices(&grid, width, height);
-    let mut group_boundaries: HashMap<usize, Vec<((usize, usize), (usize, usize))>> =
-        HashMap::new();
+pub fn get_edges(grid: &[f64], width: usize, height: usize) -> HashMap<usize, Vec<Line>> {
+    let group_map = group(&grid, width, height);
+    let mut group_boundaries: HashMap<usize, Vec<Line>> = HashMap::new();
 
     for (root_id, indices) in group_map.iter() {
-        let mut lines: Vec<((usize, usize), (usize, usize))> = Vec::new();
+        let mut lines: Vec<Line> = Vec::new();
 
         for &idx in indices {
             let x = idx % width;
@@ -134,7 +132,7 @@ pub fn get_edges(
     let mut root_to_id: HashMap<usize, usize> = HashMap::new();
     let mut next_id = 1;
 
-    let mut result: HashMap<usize, Vec<((usize, usize), (usize, usize))>> = HashMap::new();
+    let mut result: HashMap<usize, Vec<Line>> = HashMap::new();
 
     for (root, boundaries) in group_boundaries {
         let entry = root_to_id.entry(root).or_insert_with(|| {
@@ -148,9 +146,9 @@ pub fn get_edges(
     result
 }
 
-pub fn edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Vec<(usize, usize)>> {
-    let mut point_to_edges: HashMap<(usize, usize), Vec<(usize, usize)>> = HashMap::new();
-    let mut edge_set: HashSet<((usize, usize), (usize, usize))> = HashSet::new();
+pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
+    let mut point_to_edges: HashMap<Point, Vec<Point>> = HashMap::new();
+    let mut edge_set: HashSet<Line> = HashSet::new();
 
     for &(a, b) in edges {
         point_to_edges.entry(a).or_default().push(b);
@@ -196,6 +194,19 @@ pub fn edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Vec<
             }
         }
 
+        // separate inner loop
+        let mut visited_point = HashMap::new();
+        let mut l = path.len();
+        let mut i = 0;
+        while i < l - 1 {
+            let insert_ret = visited_point.insert(path[i], i);
+            if let Some(p) = insert_ret {
+                paths.push(path.drain(p..i).rev().collect());
+                l = path.len();
+            }
+            i += 1;
+        }
+
         // only closed paths
         if path.len() > 2 && path[0] == *path.last().unwrap() {
             paths.push(path);
@@ -231,7 +242,7 @@ pub fn edges_to_paths(edges: &Vec<((usize, usize), (usize, usize))>) -> Vec<Vec<
     paths
 }
 
-fn point_in_polygon(point: (usize, usize), polygon: &[(usize, usize)]) -> bool {
+fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
     let (x, y) = (point.0 as isize, point.1 as isize);
     let mut inside = false;
     let n = polygon.len();
@@ -255,7 +266,7 @@ fn point_in_polygon(point: (usize, usize), polygon: &[(usize, usize)]) -> bool {
     inside
 }
 
-fn signed_area(path: &[(usize, usize)]) -> f64 {
+fn signed_area(path: &[Point]) -> f64 {
     let n = path.len();
     let mut area = 0.0;
     for i in 0..n {
@@ -288,11 +299,11 @@ mod tests {
             .map(|x| if *x == b'#' { 1.0f64 } else { 0.0 });
 
         println!("Group:");
-        println!("{:?}", group_grid_indices(&Vec::from_iter(grid.clone()), 6, 5));
-        
+        println!("{:?}", group(&Vec::from_iter(grid.clone()), 6, 5));
+
         let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
         let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
-        
+
         println!("Path:");
         println!("{:?}", paths);
 
