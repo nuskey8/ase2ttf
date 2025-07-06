@@ -175,6 +175,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
     glyph_names.push("space".to_string());
+    cmap_entries.push((0x0000, 1)); // null
+    cmap_entries.push((0x0020, 2)); // space
     glyph_count += 3;
 
     for layer in ase.layers() {
