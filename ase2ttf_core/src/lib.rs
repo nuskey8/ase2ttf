@@ -144,6 +144,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .to_str()
         .unwrap()
         .to_string();
+    let scale: u32 = 10;
 
     // validate size
     let width = ase.width() as u32;
@@ -168,7 +169,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // add .notdef / null / space
     for _ in 0..3 {
         glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
-        glyph_metrics.push((glyph_width, 0));
+        glyph_metrics.push((glyph_width * scale, 0));
     }
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
@@ -227,14 +228,16 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                         }
                         let mut iter = path_points.iter();
                         if let Some(&(x0, y0)) = iter.next() {
+                            let scale_usize = scale as usize;
+                            let y_offset = (base_line * scale as i16) as f64;
                             path.move_to((
-                                x0 as f64,
-                                (glyph_height as usize - y0) as f64 - base_line as f64,
+                                (x0 * scale_usize) as f64,
+                                ((glyph_height as usize - y0) * scale_usize) as f64 - y_offset,
                             ));
                             for &(x, y) in iter {
                                 path.line_to((
-                                    x as f64,
-                                    (glyph_height as usize - y) as f64 - base_line as f64,
+                                    (x * scale_usize) as f64,
+                                    ((glyph_height as usize - y) * scale_usize) as f64 - y_offset,
                                 ));
                                 point += 1;
                             }
@@ -292,9 +295,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     };
                     let scaled_width =
                         ((trimmed_width as f64) * (size / glyph_width) as f64).round() as u32;
-                    glyph_metrics.push((scaled_width, min_x));
+                    glyph_metrics.push((scaled_width * scale, min_x * scale));
                 } else {
-                    glyph_metrics.push((glyph_width, min_x));
+                    glyph_metrics.push((glyph_width * scale, min_x * scale));
                 }
             }
         }
@@ -312,13 +315,13 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         Fixed::from(0),
         0,
         0b0000000000001011,
-        size as u16,
+        (size * scale) as u16,
         LongDateTime::new(Utc::now().timestamp()),
         LongDateTime::new(Utc::now().timestamp()),
         0,
-        (-base_line as f64).round() as i16,
-        glyph_width as i16,
-        (glyph_height as i16 - base_line) as i16,
+        -(base_line * scale as i16),
+        (glyph_width * scale) as i16,
+        (glyph_height as i16 - base_line) * scale as i16,
         MacStyle::empty(),
         8,
         0,
@@ -474,16 +477,16 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         },
         us_width_class: 5,
         fs_type: 0b0000_0000_0000_0000,
-        y_subscript_x_size: (glyph_width / 2) as i16,
-        y_subscript_y_size: (glyph_height / 2) as i16,
+        y_subscript_x_size: (glyph_width * scale / 2) as i16,
+        y_subscript_y_size: (glyph_height * scale / 2) as i16,
         y_subscript_x_offset: 0,
-        y_subscript_y_offset: (glyph_height / 2) as i16,
-        y_superscript_x_size: (glyph_width / 2) as i16,
-        y_superscript_y_size: (glyph_height / 2) as i16,
+        y_subscript_y_offset: (glyph_height * scale / 2) as i16,
+        y_superscript_x_size: (glyph_width * scale / 2) as i16,
+        y_superscript_y_size: (glyph_height * scale / 2) as i16,
         y_superscript_x_offset: 0,
-        y_superscript_y_offset: (glyph_height / 2) as i16,
+        y_superscript_y_offset: (glyph_height * scale / 2) as i16,
         y_strikeout_size: 1,
-        y_strikeout_position: (glyph_height / 2) as i16,
+        y_strikeout_position: (glyph_height * scale / 2) as i16,
         s_family_class: 0,
         panose_10: [0; 10],
         ul_unicode_range_1: 0,
@@ -494,11 +497,11 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         fs_selection: SelectionFlags::empty(),
         us_first_char_index: 0x0020,
         us_last_char_index: 0xFFFF,
-        s_typo_ascender: glyph_height as i16 - base_line,
-        s_typo_descender: -base_line,
+        s_typo_ascender: (glyph_height as i16 - base_line) * scale as i16,
+        s_typo_descender: -base_line * scale as i16,
         s_typo_line_gap: 0,
-        us_win_ascent: (glyph_height as i16 - base_line) as u16,
-        us_win_descent: (base_line) as u16,
+        us_win_ascent: ((glyph_height as i16 - base_line) * scale as i16) as u16,
+        us_win_descent: (base_line * scale as i16) as u16,
         ul_code_page_range_1: Default::default(),
         ul_code_page_range_2: Default::default(),
         sx_height: Default::default(),
@@ -537,8 +540,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // post table
     let glyph_name_refs: Vec<&str> = glyph_names.iter().map(|s| s.as_str()).collect();
     let mut post = Post::new_v2(glyph_name_refs);
-    post.underline_position = FWord::new(args.underline_position.unwrap_or(0));
-    post.underline_thickness = FWord::new(args.underline_thickness.unwrap_or(1));
+    post.underline_position = FWord::new(args.underline_position.unwrap_or(0) * scale as i16);
+    post.underline_thickness = FWord::new(args.underline_thickness.unwrap_or(1) * scale as i16);
     post.is_fixed_pitch = if args.trim.unwrap_or(false) { 0 } else { 1 };
     builder
         .add_table(&post)
@@ -594,13 +597,13 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
     // hhea table
     let hhea = Hhea::new(
-        (size as i16 - base_line).into(),
-        (-base_line).into(),
-        FWord::new(line_gap as i16),
-        UfWord::new(glyph_width as u16),
+        ((size as i16 - base_line) * scale as i16).into(),
+        (-base_line * scale as i16).into(),
+        FWord::new(line_gap as i16 * scale as i16),
+        UfWord::new((glyph_width * scale) as u16),
         0.into(),
         0.into(),
-        FWord::new(glyph_width as i16),
+        FWord::new((glyph_width * scale) as i16),
         1,
         0,
         0,
