@@ -540,6 +540,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     let mut post = Post::new_v2(glyph_name_refs);
     post.underline_position = FWord::new(args.underline_position.unwrap_or(0));
     post.underline_thickness = FWord::new(args.underline_thickness.unwrap_or(1));
+    post.is_fixed_pitch = if args.trim.unwrap_or(false) { 0 } else { 1 };
     builder
         .add_table(&post)
         .map_err(|e| Error::new(e.to_string()))?;
