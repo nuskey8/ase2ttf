@@ -295,7 +295,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     };
                     let scaled_width =
                         ((trimmed_width as f64) * (size / glyph_width) as f64).round() as u32;
-                    glyph_metrics.push((scaled_width * SCALE, min_x * SCALE));
+                    glyph_metrics.push((scaled_width * SCALE, 0));
                 } else {
                     glyph_metrics.push((glyph_width * SCALE, min_x * SCALE));
                 }
