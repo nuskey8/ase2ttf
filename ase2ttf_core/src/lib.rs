@@ -159,19 +159,17 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // build glyph
     let mut glyf_builder = GlyfLocaBuilder::new();
     let mut cmap_entries = vec![];
-    let mut glyph_widths = vec![];
+    let mut glyph_metrics = vec![];
     let mut glyph_names = vec![];
     let mut glyph_count = 0;
     let mut max_point: u16 = 0;
     let mut max_contour_count: u16 = 0;
 
     // add .notdef / null / space
-    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
-    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
-    glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
-    glyph_widths.push(glyph_width);
-    glyph_widths.push(glyph_width);
-    glyph_widths.push(glyph_width);
+    for _ in 0..3 {
+        glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
+        glyph_metrics.push((glyph_width, 0));
+    }
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
     glyph_names.push("space".to_string());
@@ -265,27 +263,28 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     max_contour_count
                 };
 
-                if args.trim.unwrap_or(true) {
-                    let mut min_x = glyph_width;
-                    let mut max_x = 0;
-                    for y in 0..glyph_height {
-                        for x in 0..glyph_width {
-                            let px = x0 + x;
-                            let py = y0 + y;
-                            if px >= width || py >= height {
-                                continue;
+                let mut min_x = glyph_width;
+                let mut max_x = 0;
+                for y in 0..glyph_height {
+                    for x in 0..glyph_width {
+                        let px = x0 + x;
+                        let py = y0 + y;
+                        if px >= width || py >= height {
+                            continue;
+                        }
+                        let pixel = image.get_pixel(px, py);
+                        if pixel[3] != 0 {
+                            if x < min_x {
+                                min_x = x;
                             }
-                            let pixel = image.get_pixel(px, py);
-                            if pixel[3] != 0 {
-                                if x < min_x {
-                                    min_x = x;
-                                }
-                                if x > max_x {
-                                    max_x = x;
-                                }
+                            if x > max_x {
+                                max_x = x;
                             }
                         }
                     }
+                }
+
+                if args.trim.unwrap_or(true) {
                     let trimmed_width = if min_x > max_x {
                         0
                     } else {
@@ -293,9 +292,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     };
                     let scaled_width =
                         ((trimmed_width as f64) * (size / glyph_width) as f64).round() as u32;
-                    glyph_widths.push(scaled_width);
+                    glyph_metrics.push((scaled_width, min_x));
                 } else {
-                    glyph_widths.push(glyph_width);
+                    glyph_metrics.push((glyph_width, min_x));
                 }
             }
         }
@@ -613,9 +612,9 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
     // hmtx table
     let hmtx = Hmtx::new(
-        glyph_widths
+        glyph_metrics
             .iter()
-            .map(|x| LongMetric::new(*x as u16, 0))
+            .map(|x| LongMetric::new(x.0 as u16, x.1 as i16))
             .collect(),
         vec![],
     );
