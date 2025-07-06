@@ -175,6 +175,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
     glyph_names.push("space".to_string());
+    cmap_entries.push((0x0000, 1)); // null
+    cmap_entries.push((0x0020, 2)); // space
     glyph_count += 3;
 
     for layer in ase.layers() {
@@ -491,8 +493,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         ul_unicode_range_4: 0,
         ach_vend_id: Tag::from_u32(0),
         fs_selection: SelectionFlags::empty(),
-        us_first_char_index: 0,
-        us_last_char_index: 57,
+        us_first_char_index: 0x0020,
+        us_last_char_index: 0xFFFF,
         s_typo_ascender: glyph_height as i16 - base_line,
         s_typo_descender: -base_line,
         s_typo_line_gap: 0,
