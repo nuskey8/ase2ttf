@@ -45,6 +45,9 @@ struct Args {
     #[arg(long, require_equals = true, default_value_t = 0)]
     line_gap: u8,
 
+    #[arg(long, require_equals = true)]
+    spacing: Option<u32>,
+
     #[arg(long, require_equals = true, default_value_t = 2)]
     baseline: i16,
 
@@ -77,6 +80,7 @@ fn main() {
             baseline: Some(args.baseline),
             underline_position: Some(args.underline_position),
             underline_thickness: Some(args.underline_thickness),
+            spacing: args.spacing,
         },
     )
     .unwrap();

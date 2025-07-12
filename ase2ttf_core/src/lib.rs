@@ -43,6 +43,7 @@ pub struct Params {
     pub trim: Option<bool>,
     pub trim_pad: Option<u32>,
     pub line_gap: Option<u8>,
+    pub spacing: Option<u32>,
     pub baseline: Option<i16>,
     pub underline_position: Option<i16>,
     pub underline_thickness: Option<i16>,
@@ -63,6 +64,7 @@ impl Params {
         trim: Option<bool>,
         trim_pad: Option<u32>,
         line_gap: Option<u8>,
+        spacing: Option<u32>,
         baseline: Option<i16>,
         underline_position: Option<i16>,
         underline_thickness: Option<i16>,
@@ -79,6 +81,7 @@ impl Params {
             trim,
             trim_pad,
             line_gap,
+            spacing,
             baseline,
             underline_position,
             underline_thickness,
@@ -169,7 +172,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     // add .notdef / null / space
     for _ in 0..3 {
         glyf_builder.add_glyph(&SimpleGlyph::default()).unwrap();
-        glyph_metrics.push((glyph_width * SCALE, 0));
+        glyph_metrics.push((args.spacing.unwrap_or(glyph_width) * SCALE, 0));
     }
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
