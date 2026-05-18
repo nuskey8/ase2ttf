@@ -18,7 +18,7 @@ use write_fonts::{
     tables::{
         cmap::PlatformId,
         glyf::SimpleGlyph,
-        head::{Head, MacStyle},
+        head::{Flags, Head, MacStyle},
         name::{Name, NameRecord},
     },
     types::{Fixed, LongDateTime, NameId},
@@ -314,10 +314,14 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     }
 
     // head table
+    let mut flags = Flags::empty();
+    flags.insert(Flags::BASELINE_AT_Y_0);
+    flags.insert(Flags::LSB_AT_X_0);
+    flags.insert(Flags::FORCE_INTEGER_PPEM);
     let head = Head::new(
         Fixed::from(0),
         0,
-        0b0000000000001011,
+        flags,
         (size * SCALE) as u16,
         LongDateTime::new(Utc::now().timestamp()),
         LongDateTime::new(Utc::now().timestamp()),

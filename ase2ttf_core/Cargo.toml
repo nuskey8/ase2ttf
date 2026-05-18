@@ -11,9 +11,9 @@ include = ["/Cargo.toml", "../LICENSE", "../README.md", "/src/**"]
 [dependencies]
 asefile = "0.3.8"
 chrono = "0.4.41"
-kurbo = "0.11.2"
+kurbo = "0.13.0"
 wasm-bindgen = { version = "0.2.100", optional = true }
-write-fonts = "0.39.0"
+write-fonts = "0.48.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
