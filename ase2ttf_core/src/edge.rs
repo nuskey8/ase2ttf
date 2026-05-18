@@ -216,6 +216,10 @@ pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
         }
     }
 
+    for path in paths.iter_mut() {
+        simplify_collinear_points(path);
+    }
+
     let n = paths.len();
     for i in 0..n {
         let mut inside_count = 0;
@@ -240,6 +244,60 @@ pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
         }
     }
     paths
+}
+
+fn simplify_collinear_points(path: &mut Vec<Point>) {
+    if path.len() <= 4 {
+        return;
+    }
+
+    let is_closed = path[0] == *path.last().unwrap();
+    if !is_closed {
+        path.dedup_by(|a, b| a == b);
+        if path.len() <= 2 {
+            return;
+        }
+
+        let mut simplified = Vec::with_capacity(path.len());
+        simplified.push(path[0]);
+        for window in path.windows(3) {
+            if !is_collinear(window[0], window[1], window[2]) {
+                simplified.push(window[1]);
+            }
+        }
+        simplified.push(*path.last().unwrap());
+        *path = simplified;
+        return;
+    }
+
+    let mut vertices = path[..path.len() - 1].to_vec();
+    vertices.dedup_by(|a, b| a == b);
+    if vertices.len() <= 2 {
+        return;
+    }
+
+    let mut simplified = Vec::with_capacity(vertices.len() + 1);
+    for i in 0..vertices.len() {
+        let prev = vertices[(i + vertices.len() - 1) % vertices.len()];
+        let curr = vertices[i];
+        let next = vertices[(i + 1) % vertices.len()];
+        if !is_collinear(prev, curr, next) {
+            simplified.push(curr);
+        }
+    }
+
+    if simplified.len() >= 3 {
+        simplified.push(simplified[0]);
+        *path = simplified;
+    }
+}
+
+fn is_collinear(a: Point, b: Point, c: Point) -> bool {
+    let ab_x = b.0 as isize - a.0 as isize;
+    let ab_y = b.1 as isize - a.1 as isize;
+    let bc_x = c.0 as isize - b.0 as isize;
+    let bc_y = c.1 as isize - b.1 as isize;
+    ab_x * bc_y == ab_y * bc_x
 }
 
 fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
@@ -301,16 +359,58 @@ mod tests {
         println!("Group:");
         println!("{:?}", group(&Vec::from_iter(grid.clone()), 6, 5));
 
-        let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
+        let boundaries = get_edges(&Vec::from_iter(grid), 6, 5);
         let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
 
         println!("Path:");
         println!("{:?}", paths);
 
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 1);
 
         let areas: Vec<_> = paths.iter().map(|p| signed_area(p)).collect();
         assert_eq!(areas.iter().filter(|&a| *a < 0.0).count(), 1);
-        assert_eq!(areas.iter().filter(|&a| *a > 0.0).count(), 1);
+        assert_eq!(areas.iter().filter(|&a| *a > 0.0).count(), 0);
+    }
+
+    #[test]
+    fn edges_to_paths_removes_collinear_points_from_rectangle() {
+        let grid = vec![1.0; 6];
+        let boundaries = get_edges(&grid, 3, 2);
+        let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 2), (3, 2), (3, 0), (0, 0)]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_keeps_corner_points() {
+        let grid = vec![
+            1.0, 0.0, //
+            1.0, 1.0,
+        ];
+        let boundaries = get_edges(&grid, 2, 2);
+        let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 2), (2, 2), (2, 1), (1, 1), (1, 0), (0, 0)]
+        );
+    }
+
+    fn normalize_closed_path(path: &[Point]) -> Vec<Point> {
+        let vertices = &path[..path.len() - 1];
+        let start = vertices
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, point)| *point)
+            .map(|(i, _)| i)
+            .unwrap();
+        let mut normalized = Vec::with_capacity(path.len());
+        normalized.extend(vertices[start..].iter().copied());
+        normalized.extend(vertices[..start].iter().copied());
+        normalized.push(normalized[0]);
+        normalized
     }
 }
