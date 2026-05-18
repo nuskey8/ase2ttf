@@ -8,7 +8,7 @@ use ase2ttf_core::{Params, generate_ttf};
 use clap::Parser;
 
 #[derive(Debug, Parser)]
-#[command(version = "0.1.0", about, long_about = None)]
+#[command(version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 struct Args {
     path: String,
 
