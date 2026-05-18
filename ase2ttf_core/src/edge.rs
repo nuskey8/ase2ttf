@@ -216,6 +216,10 @@ pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
         }
     }
 
+    for path in paths.iter_mut() {
+        simplify_collinear_points(path);
+    }
+
     let n = paths.len();
     for i in 0..n {
         let mut inside_count = 0;
@@ -240,6 +244,60 @@ pub fn edges_to_paths(edges: &Vec<Line>) -> Vec<Vec<Point>> {
         }
     }
     paths
+}
+
+fn simplify_collinear_points(path: &mut Vec<Point>) {
+    if path.len() <= 4 {
+        return;
+    }
+
+    let is_closed = path[0] == *path.last().unwrap();
+    if !is_closed {
+        path.dedup_by(|a, b| a == b);
+        if path.len() <= 2 {
+            return;
+        }
+
+        let mut simplified = Vec::with_capacity(path.len());
+        simplified.push(path[0]);
+        for window in path.windows(3) {
+            if !is_collinear(window[0], window[1], window[2]) {
+                simplified.push(window[1]);
+            }
+        }
+        simplified.push(*path.last().unwrap());
+        *path = simplified;
+        return;
+    }
+
+    let mut vertices = path[..path.len() - 1].to_vec();
+    vertices.dedup_by(|a, b| a == b);
+    if vertices.len() <= 2 {
+        return;
+    }
+
+    let mut simplified = Vec::with_capacity(vertices.len() + 1);
+    for i in 0..vertices.len() {
+        let prev = vertices[(i + vertices.len() - 1) % vertices.len()];
+        let curr = vertices[i];
+        let next = vertices[(i + 1) % vertices.len()];
+        if !is_collinear(prev, curr, next) {
+            simplified.push(curr);
+        }
+    }
+
+    if simplified.len() >= 3 {
+        simplified.push(simplified[0]);
+        *path = simplified;
+    }
+}
+
+fn is_collinear(a: Point, b: Point, c: Point) -> bool {
+    let ab_x = b.0 as isize - a.0 as isize;
+    let ab_y = b.1 as isize - a.1 as isize;
+    let bc_x = c.0 as isize - b.0 as isize;
+    let bc_y = c.1 as isize - b.1 as isize;
+    ab_x * bc_y == ab_y * bc_x
 }
 
 fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
@@ -283,34 +341,207 @@ mod tests {
 
     #[test]
     fn sandbox() {
-        let src = "
+        let (grid, width, height) = parse_grid(
+            "
 --##--
 -##---
 ##----
 -##---
 --##--
-"
-        .trim()
-        .replace("\n", "");
-
-        let grid = src
-            .as_bytes()
-            .into_iter()
-            .map(|x| if *x == b'#' { 1.0f64 } else { 0.0 });
+",
+        );
 
         println!("Group:");
-        println!("{:?}", group(&Vec::from_iter(grid.clone()), 6, 5));
+        println!("{:?}", group(&grid, width, height));
 
-        let boundaries = get_edges(&Vec::from_iter(grid), 5, 6);
+        let boundaries = get_edges(&grid, width, height);
         let paths = edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()));
 
         println!("Path:");
         println!("{:?}", paths);
 
-        assert_eq!(paths.len(), 2);
+        assert_eq!(paths.len(), 1);
 
         let areas: Vec<_> = paths.iter().map(|p| signed_area(p)).collect();
         assert_eq!(areas.iter().filter(|&a| *a < 0.0).count(), 1);
-        assert_eq!(areas.iter().filter(|&a| *a > 0.0).count(), 1);
+        assert_eq!(areas.iter().filter(|&a| *a > 0.0).count(), 0);
+    }
+
+    #[test]
+    fn edges_to_paths_removes_collinear_points_from_rectangle() {
+        let paths = paths_from_grid(
+            "
+###
+###
+",
+        );
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 2), (3, 2), (3, 0), (0, 0)]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_keeps_corner_points() {
+        let paths = paths_from_grid(
+            "
+#-
+##
+",
+        );
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 2), (2, 2), (2, 1), (1, 1), (1, 0), (0, 0)]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_removes_collinear_points_from_single_row() {
+        let paths = paths_from_grid(
+            "
+####
+",
+        );
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 1), (4, 1), (4, 0), (0, 0)]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_removes_collinear_points_from_single_column() {
+        let paths = paths_from_grid(
+            "
+#
+#
+#
+",
+        );
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![(0, 0), (0, 3), (1, 3), (1, 0), (0, 0)]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_keeps_stair_step_corners() {
+        let paths = paths_from_grid(
+            "
+#--
+##-
+###
+",
+        );
+
+        assert_eq!(
+            normalize_closed_path(&paths[0]),
+            vec![
+                (0, 0),
+                (0, 3),
+                (3, 3),
+                (3, 2),
+                (2, 2),
+                (2, 1),
+                (1, 1),
+                (1, 0),
+                (0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_handles_hole_with_simplified_outer_and_inner_paths() {
+        let paths = paths_from_grid(
+            "
+###
+#-#
+###
+",
+        );
+
+        assert_eq!(paths.len(), 2);
+
+        let mut normalized_paths: Vec<_> = paths
+            .iter()
+            .map(|path| normalize_closed_path(path))
+            .collect();
+        normalized_paths.sort();
+
+        assert_eq!(
+            normalized_paths,
+            vec![
+                vec![(0, 0), (0, 3), (3, 3), (3, 0), (0, 0)],
+                vec![(1, 1), (2, 1), (2, 2), (1, 2), (1, 1)],
+            ]
+        );
+    }
+
+    #[test]
+    fn edges_to_paths_keeps_disconnected_rectangles_separate() {
+        let paths = paths_from_grid(
+            "
+##-#
+##-#
+",
+        );
+
+        assert_eq!(paths.len(), 2);
+
+        let mut normalized_paths: Vec<_> = paths
+            .iter()
+            .map(|path| normalize_closed_path(path))
+            .collect();
+        normalized_paths.sort();
+
+        assert_eq!(
+            normalized_paths,
+            vec![
+                vec![(0, 0), (0, 2), (2, 2), (2, 0), (0, 0)],
+                vec![(3, 0), (3, 2), (4, 2), (4, 0), (3, 0)],
+            ]
+        );
+    }
+
+    fn paths_from_grid(src: &str) -> Vec<Vec<Point>> {
+        let (grid, width, height) = parse_grid(src);
+        let boundaries = get_edges(&grid, width, height);
+        edges_to_paths(&Vec::from_iter(boundaries.into_values().flatten()))
+    }
+
+    fn parse_grid(src: &str) -> (Vec<f64>, usize, usize) {
+        let rows: Vec<_> = src.trim().lines().map(str::trim).collect();
+        let height = rows.len();
+        let width = rows.first().map(|row| row.len()).unwrap_or(0);
+        assert!(rows.iter().all(|row| row.len() == width));
+
+        let grid = rows
+            .iter()
+            .flat_map(|row| {
+                row.as_bytes()
+                    .iter()
+                    .map(|x| if *x == b'#' { 1.0f64 } else { 0.0 })
+            })
+            .collect();
+
+        (grid, width, height)
+    }
+
+    fn normalize_closed_path(path: &[Point]) -> Vec<Point> {
+        let vertices = &path[..path.len() - 1];
+        let start = vertices
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, point)| *point)
+            .map(|(i, _)| i)
+            .unwrap();
+        let mut normalized = Vec::with_capacity(path.len());
+        normalized.extend(vertices[start..].iter().copied());
+        normalized.extend(vertices[..start].iter().copied());
+        normalized.push(normalized[0]);
+        normalized
     }
 }
