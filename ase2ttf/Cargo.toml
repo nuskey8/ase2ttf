@@ -1,6 +1,6 @@
 [package]
 name = "ase2ttf"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2024"
 description = "A Command-line tool for creating pixel fonts from Aseprite files"
 authors = ["nuskey"]
@@ -16,5 +16,5 @@ name = "ase2ttf"
 path = "src/main.rs"
 
 [dependencies]
-ase2ttf_core = { version = "0.1.0", path = "../ase2ttf_core" }
+ase2ttf_core = { version = "0.2.0", path = "../ase2ttf_core" }
 clap = { version = "4.5.40", features = ["derive"] }
