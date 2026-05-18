@@ -1,0 +1,2 @@
+[workspace]
+members = ["ase2ttf_core", "ase2ttf"]

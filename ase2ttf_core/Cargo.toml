@@ -19,4 +19,4 @@ write-fonts = "0.48.1"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-wasm = [ "wasm-bindgen" ]
+wasm = ["wasm-bindgen"]
