@@ -2,9 +2,10 @@ use asefile::AsepriteFile;
 use chrono::Utc;
 use kurbo::BezPath;
 use std::cmp;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::path::Path;
-use write_fonts::tables::cmap::{Cmap, CmapSubtable, EncodingRecord};
+use write_fonts::tables::cmap::Cmap;
 use write_fonts::tables::glyf::{GlyfLocaBuilder, Glyph};
 use write_fonts::tables::hhea::Hhea;
 use write_fonts::tables::hmtx::Hmtx;
@@ -12,7 +13,7 @@ use write_fonts::tables::maxp::Maxp;
 use write_fonts::tables::os2::{Os2, SelectionFlags};
 use write_fonts::tables::post::Post;
 use write_fonts::tables::vmtx::LongMetric;
-use write_fonts::types::{FWord, Tag, UfWord};
+use write_fonts::types::{FWord, GlyphId, Tag, UfWord};
 use write_fonts::{
     OffsetMarker,
     tables::{
@@ -162,7 +163,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
 
     // build glyph
     let mut glyf_builder = GlyfLocaBuilder::new();
-    let mut cmap_entries = vec![];
+    let mut cmap_entries = BTreeMap::new();
     let mut glyph_metrics = vec![];
     let mut glyph_names = vec![];
     let mut glyph_count = 0;
@@ -177,8 +178,8 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     glyph_names.push(".notdef".to_string());
     glyph_names.push("null".to_string());
     glyph_names.push("space".to_string());
-    cmap_entries.push((0x0000, 1)); // null
-    cmap_entries.push((0x0020, 2)); // space
+    cmap_entries.insert(0x0000, 1); // null
+    cmap_entries.insert(0x0020, 2); // space
     glyph_count += 3;
 
     for layer in ase.layers() {
@@ -237,6 +238,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                                 (x0 * scale_usize) as f64,
                                 ((glyph_height as usize - y0) * scale_usize) as f64 - y_offset,
                             ));
+                            point += 1;
                             for &(x, y) in iter {
                                 path.line_to((
                                     (x * scale_usize) as f64,
@@ -254,11 +256,15 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
                     continue;
                 }
 
+                let codepoint = base_code + (row * cols + col) as u32;
+                if char::from_u32(codepoint).is_none() {
+                    continue;
+                }
+
                 glyf_builder
                     .add_glyph(&Glyph::Simple(SimpleGlyph::from_bezpath(&path).unwrap()))
                     .unwrap();
-                let codepoint = base_code + (row * cols + col) as u32;
-                cmap_entries.push((codepoint, glyph_count));
+                cmap_entries.insert(codepoint, glyph_count);
                 glyph_count += 1;
                 glyph_names.push(format!("U+{:04X}", codepoint));
 
@@ -318,6 +324,34 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     flags.insert(Flags::BASELINE_AT_Y_0);
     flags.insert(Flags::LSB_AT_X_0);
     flags.insert(Flags::FORCE_INTEGER_PPEM);
+    let weight_class = if let Some(weight_class) = args.font_weight {
+        weight_class
+    } else {
+        match args
+            .subfamily
+            .as_deref()
+            .unwrap_or("regular")
+            .to_lowercase()
+            .as_str()
+        {
+            "thin" => 100,
+            "extra-light" | "extralight" | "ultra-light" | "ultralight" => 200,
+            "light" => 300,
+            "regular" => 400,
+            "medium" => 500,
+            "semibold" | "semi-bold" | "demi-bold" | "demibold" => 600,
+            "bold" => 700,
+            "extrabold" | "extra-bold" | "ultrabold" | "ultra-bold" => 800,
+            "black" | "heavy" => 900,
+            _ => 400,
+        }
+    };
+
+    let mut mac_style = MacStyle::empty();
+    if weight_class >= 700 {
+        mac_style.insert(MacStyle::BOLD);
+    }
+
     let head = Head::new(
         Fixed::from(0),
         0,
@@ -329,7 +363,7 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         -(base_line * SCALE as i16),
         (glyph_width * SCALE) as i16,
         (glyph_height as i16 - base_line) * SCALE as i16,
-        MacStyle::empty(),
+        mac_style,
         8,
         0,
     );
@@ -453,35 +487,37 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
     }
 
     let name = Name::new(name_records);
+    let mut name = name;
+    name.name_record.sort();
     builder
         .add_table(&name)
         .map_err(|e| Error::new(e.to_string()))?;
 
     // OS/2 table
+    let first_bmp_char = cmap_entries
+        .keys()
+        .copied()
+        .filter(|codepoint| *codepoint <= 0xFFFF)
+        .min()
+        .unwrap_or(0) as u16;
+    let last_bmp_char = cmap_entries
+        .keys()
+        .copied()
+        .filter(|codepoint| *codepoint <= 0xFFFF)
+        .max()
+        .unwrap_or(0) as u16;
+    let mut fs_selection = SelectionFlags::empty();
+    if weight_class >= 700 {
+        fs_selection.insert(SelectionFlags::BOLD);
+    } else {
+        fs_selection.insert(SelectionFlags::REGULAR);
+    }
+    let ascender = (glyph_height as i16 - base_line) * SCALE as i16;
+    let descender = -base_line * SCALE as i16;
+
     let os2 = Os2 {
-        x_avg_char_width: (glyph_width as i16),
-        us_weight_class: if let Some(weight_class) = args.font_weight {
-            weight_class
-        } else {
-            match args
-                .subfamily
-                .as_deref()
-                .unwrap_or("regular")
-                .to_lowercase()
-                .as_str()
-            {
-                "thin" => 100,
-                "extra-light" | "extralight" | "ultra-light" | "ultralight" => 200,
-                "light" => 300,
-                "regular" => 400,
-                "medium" => 500,
-                "semibold" | "semi-bold" | "demi-bold" | "demibold" => 600,
-                "bold" => 700,
-                "extrabold" | "extra-bold" | "ultrabold" | "ultra-bold" => 800,
-                "black" | "heavy" => 900,
-                _ => 400,
-            }
-        },
+        x_avg_char_width: (glyph_width * SCALE) as i16,
+        us_weight_class: weight_class,
         us_width_class: 5,
         fs_type: 0b0000_0000_0000_0000,
         y_subscript_x_size: (glyph_width * SCALE / 2) as i16,
@@ -501,21 +537,21 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         ul_unicode_range_3: 0,
         ul_unicode_range_4: 0,
         ach_vend_id: Tag::from_u32(0),
-        fs_selection: SelectionFlags::empty(),
-        us_first_char_index: 0x0020,
-        us_last_char_index: 0xFFFF,
-        s_typo_ascender: (glyph_height as i16 - base_line) * SCALE as i16,
-        s_typo_descender: -base_line * SCALE as i16,
+        fs_selection,
+        us_first_char_index: first_bmp_char,
+        us_last_char_index: last_bmp_char,
+        s_typo_ascender: ascender,
+        s_typo_descender: descender,
         s_typo_line_gap: 0,
-        us_win_ascent: ((glyph_height as i16 - base_line) * SCALE as i16) as u16,
+        us_win_ascent: ascender as u16,
         us_win_descent: (base_line * SCALE as i16) as u16,
-        ul_code_page_range_1: Default::default(),
-        ul_code_page_range_2: Default::default(),
-        sx_height: Default::default(),
-        s_cap_height: Default::default(),
-        us_default_char: Default::default(),
-        us_break_char: Default::default(),
-        us_max_context: Default::default(),
+        ul_code_page_range_1: Some(1),
+        ul_code_page_range_2: Some(0),
+        sx_height: Some(ascender / 2),
+        s_cap_height: Some(ascender),
+        us_default_char: Some(0),
+        us_break_char: Some(0x0020),
+        us_max_context: Some(1),
         us_lower_optical_point_size: Default::default(),
         us_upper_optical_point_size: Default::default(),
     };
@@ -555,49 +591,10 @@ pub fn generate_ttf(ase_bytes: &[u8], args: Params) -> Result<Vec<u8>, Error> {
         .map_err(|e| Error::new(e.to_string()))?;
 
     // cmap table
-    let mut start_code = Vec::new();
-    let mut end_code = Vec::new();
-    let mut id_delta = Vec::new();
-    let mut id_range_offsets = Vec::new();
-    let glyph_id_array = Vec::new();
-    for (codepoint, glyph_id) in &cmap_entries {
-        let unicode = *codepoint as u16;
-        start_code.push(unicode);
-        end_code.push(unicode);
-        id_delta.push((*glyph_id as i32 - unicode as i32) as i16);
-        id_range_offsets.push(0);
-    }
-    start_code.push(0xFFFF);
-    end_code.push(0xFFFF);
-    id_delta.push(1);
-    id_range_offsets.push(0);
-
-    let subtable = CmapSubtable::format_4(
-        0,
-        end_code,
-        start_code,
-        id_delta,
-        id_range_offsets,
-        glyph_id_array,
-    );
-
-    let cmap = Cmap::new(vec![
-        EncodingRecord {
-            platform_id: PlatformId::Unicode,
-            encoding_id: 3,
-            subtable: OffsetMarker::new(subtable.clone()),
-        },
-        EncodingRecord {
-            platform_id: PlatformId::Macintosh,
-            encoding_id: 0,
-            subtable: OffsetMarker::new(subtable.clone()),
-        },
-        EncodingRecord {
-            platform_id: PlatformId::Windows,
-            encoding_id: 1,
-            subtable: OffsetMarker::new(subtable),
-        },
-    ]);
+    let cmap = Cmap::from_mappings(cmap_entries.iter().filter_map(|(codepoint, glyph_id)| {
+        char::from_u32(*codepoint).map(|ch| (ch, GlyphId::new((*glyph_id).into())))
+    }))
+    .map_err(|e| Error::new(e.to_string()))?;
     builder
         .add_table(&cmap)
         .map_err(|e| Error::new(e.to_string()))?;
